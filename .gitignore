@@ -1,7 +1,14 @@
 .scratch/
 node_modules/
 .env
-.env.*
+.env.local
+.env.production
+.env.*.local
+!.env.example
 *.log
 .DS_Store
 Thumbs.db
+.next/
+dist/
+out/
+.codegraph/
