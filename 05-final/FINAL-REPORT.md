@@ -63,7 +63,7 @@ Single third-party model reviewed all 24 phase gates + both P12 finals from git-
 | Phase mean (1–10 dims) | 8.51 | **8.65** |
 | **Official Test 1** | **36.5** | **37** |
 
-See `results/TEST1-REAUDIT.md` and `results/reaudit/`.
+See `../02-test1-build/verdict-reaudit.md` and `../02-test1-build/reaudit/`.
 
 - **Sol strengths (reaudit):** slightly stronger phase-trail inventory/plan fidelity; desktop Phase 12 more complete.
 - **Fable strengths:** password auth + tests in original build; full audit still scored inventory 11/12.
@@ -120,14 +120,14 @@ Both restored correct root causes for all nine symptoms with live verification c
 
 | Artifact | Path |
 |---|---|
-| Scorecard | `results/SCORECARD.md` |
-| Test 1 (original) | `results/TEST1-VERDICT.md`, `results/blind-reviews/` |
-| Test 1 (reaudit, official) | `results/TEST1-REAUDIT.md`, `results/reaudit/` |
-| Test 2 | `results/TEST2-VERDICT.md`, `results/detection/` |
-| Test 3 | `results/TEST3-VERDICT.md`, `results/fixes/` |
-| Phase reviews (original) | `results/phase-reviews/` |
-| Arms | `rebuild-a/`, `rebuild-b/` (post-Test-3 fixed states) |
+| Scorecard | `../00-design/scorecard.md` |
+| Test 1 (original) | `../02-test1-build/verdict-original.md`, `../02-test1-build/blind-reviews/` |
+| Test 1 (reaudit, official) | `../02-test1-build/verdict-reaudit.md`, `../02-test1-build/reaudit/` |
+| Test 2 | `../03-test2-detection/VERDICT.md` |
+| Test 3 | `../04-test3-fix/VERDICT.md` |
+| Phase reviews (original) | `../02-test1-build/phase-reviews-original/` |
+| Arms | private working tree only (not in this public repo) |
 
 ## Deviations
 
-See `results/DEVIATIONS.md` (reviewer write access, resource_exhausted retries, fresh Sol agent mid-build, GLM reaudit).
+See [`DEVIATIONS.md`](DEVIATIONS.md) (reviewer write access, resource_exhausted retries, fresh Sol agent mid-build, GLM reaudit).

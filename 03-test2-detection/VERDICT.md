@@ -54,8 +54,8 @@ Both reports listed real pre-existing issues (passwordless login, register→sup
 
 ## Sources
 
-- `results/detection/rebuild-a.md` — Fable
-- `results/detection/rebuild-b.md` — Sol
+- `fable-findings.md` — Fable
+- `sol-findings.md` — Sol
 
 ## Next
 

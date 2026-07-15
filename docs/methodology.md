@@ -20,18 +20,18 @@ They did **not** receive rebuild-protocol, review-protocol, or subagent playbook
 
 1. Contestant writes `PHASE-PLAN.md` covering every inventory ID exactly once.
 2. Builds one phase; updates `STATUS.md` with evidence; stops.
-3. Orchestrator commits; phase reviewer writes `results/phase-reviews/…`.
+3. Orchestrator commits; phase reviewer writes a phase review under `02-test1-build/`.
 4. Resume next phase until 12 complete (or contestant’s own plan length — both used 12).
 
 ## Test 1 scoring
 
-Rubric in `artifacts/results/SCORECARD.md` and `BLIND-REVIEW-RUBRIC.md`.
+Rubric in [`00-design/scorecard.md`](../00-design/scorecard.md) and [`00-design/rubrics/blind-review.md`](../00-design/rubrics/blind-review.md).
 
 **Original:** mean of two contestant-model blind finals (Fable + Sol each scoring both arms).
 
 **Official after critique:** GLM 5.2 full finals (both 37/40) + phase-trail mean to break the tie (−0.5 on A) → 36.5 vs 37.
 
-**Tie-break add-on:** Grok + Kimi score the two P12 finals only; see `docs/tiebreak.md`. Does not automatically replace the GLM official number unless the write-up says so.
+**Tie-break add-on:** Grok + Kimi score the two P12 finals only; see [`02-test1-build/tiebreak-summary.md`](../02-test1-build/tiebreak-summary.md). Does not automatically replace the GLM official number unless the write-up says so.
 
 ## Test 2 scoring
 

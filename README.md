@@ -72,11 +72,11 @@ Contestants never ran `git`. The orchestrator committed and pushed.
 
 Each arm got the same six always-on project rules (ponytail, clean-code, workflow, etc.) and **no** rebuild/review/subagent ceremony. They wrote their own `PHASE-PLAN.md`, built one phase at a time, stopped at each gate with running-app evidence in `STATUS.md`.
 
-Identical prompt: [`artifacts/results/CONTESTANT-PROMPT.md`](artifacts/results/CONTESTANT-PROMPT.md).
+Identical prompt: [`00-design/contestant-prompt.md`](00-design/contestant-prompt.md).
 
 ### Scorecard (100 points)
 
-Locked before anyone built: [`artifacts/results/SCORECARD.md`](artifacts/results/SCORECARD.md).
+Locked before anyone built: [`00-design/scorecard.md`](00-design/scorecard.md).
 
 | Test | Weight |
 |---|---:|
@@ -109,7 +109,7 @@ Both preferred B. Sol’s tree won on inventory depth (especially desktop/LAN/Be
 
 Winner clone for later tests: **rebuild-b** copied over rebuild-a so detection/fix rounds used the same code.
 
-Original write-up: [`artifacts/results/TEST1-VERDICT.md`](artifacts/results/TEST1-VERDICT.md).
+Original write-up: [`02-test1-build/verdict-original.md`](02-test1-build/verdict-original.md).
 
 ### Act 2 — “Your reviewers were unfair”
 
@@ -133,7 +133,7 @@ We restored every phase-complete commit into audit snapshots (24 trees: A×12 + 
 
 The 4.5-point original gap collapsed to half a point. The builds were much closer than the split-reviewer + contestant-blind pass suggested. Phase trail (especially late i18n / desktop completeness) broke the full-audit tie toward B.
 
-Details: [`artifacts/results/TEST1-REAUDIT.md`](artifacts/results/TEST1-REAUDIT.md).
+Details: [`02-test1-build/verdict-reaudit.md`](02-test1-build/verdict-reaudit.md).
 
 ### Act 4 — Second neutrals on the two finals
 
@@ -145,7 +145,7 @@ GLM’s full finals tied at 37–37. We ran **Grok 4.5** and **Kimi K2.7** on th
 | Grok | 32 | **37** | **B** (desktop depth vs A overclaim) |
 | Kimi | **33** | 29 | **A** (tests + trust boundary) |
 
-They disagreed. Official Test 1 stays on the GLM reaudit (36.5 / 37). Even under Kimi’s A preference, Sol still wins the overall 100-point card on Tests 2–3. Full write-up: [`docs/tiebreak.md`](docs/tiebreak.md).
+They disagreed. Official Test 1 stays on the GLM reaudit (36.5 / 37). Even under Kimi’s A preference, Sol still wins the overall 100-point card on Tests 2–3. Full write-up: [`02-test1-build/tiebreak-summary.md`](02-test1-build/tiebreak-summary.md).
 
 ### Act 5 — Test 2: find the bugs
 
@@ -162,7 +162,7 @@ Sol hit the board offset/rounding pair, reversed conflict strategies, sync pagin
 
 This is the cleanest separation in the experiment: **same code, different eyes.**
 
-[`artifacts/results/TEST2-VERDICT.md`](artifacts/results/TEST2-VERDICT.md)
+[`03-test2-detection/VERDICT.md`](03-test2-detection/VERDICT.md)
 
 ### Act 6 — Test 3: vague symptoms only
 
@@ -178,7 +178,7 @@ Fresh agents. Nine symptom descriptions, no ledger. Grade: did they hit the seed
 
 Both fixed all nine root causes. Fable lost points for deleting unrelated `.cursor/rules` files. Sol stayed closer to the fault surface (with one slightly broad session/middleware expansion).
 
-[`artifacts/results/TEST3-VERDICT.md`](artifacts/results/TEST3-VERDICT.md)
+[`04-test3-fix/VERDICT.md`](04-test3-fix/VERDICT.md)
 
 ---
 
@@ -193,7 +193,7 @@ Both fixed all nine root causes. Fable lost points for deleting unrelated `.curs
 
 Original totals before reaudit: Fable 62.5, Sol 76. Reaudit raised both Test 1 scores and narrowed the build gap; Sol still wins on detection and fix discipline.
 
-Full narrative report (working copy): [`artifacts/results/FINAL-REPORT.md`](artifacts/results/FINAL-REPORT.md).
+Full narrative report: [`05-final/FINAL-REPORT.md`](05-final/FINAL-REPORT.md).
 
 ---
 
@@ -219,20 +219,24 @@ Full narrative report (working copy): [`artifacts/results/FINAL-REPORT.md`](arti
 | Seeded bug ledger not published | Prevents spoiling future runs; methodology described |
 | N=1 product, N=1 day | Do not over-generalize to all coding tasks |
 
-Deviations log: [`artifacts/results/DEVIATIONS.md`](artifacts/results/DEVIATIONS.md).
+Deviations log: [`05-final/DEVIATIONS.md`](05-final/DEVIATIONS.md).
 
 ---
 
-## Repo map
+## Repo map (read in order)
 
-| Path | Contents |
-|---|---|
-| [`README.md`](README.md) | This story |
-| [`docs/methodology.md`](docs/methodology.md) | Protocols, blinding, scoring math |
-| [`docs/tiebreak.md`](docs/tiebreak.md) | Second-neutral finals summary |
-| [`artifacts/inventory/`](artifacts/inventory/) | Frozen feature + editor inventories |
-| [`artifacts/results/`](artifacts/results/) | Prompts, rubrics, all verdicts and reviews |
-| [`artifacts/audit/`](artifacts/audit/) | Phase-gate map, reaudit instructions |
+```
+README.md                 ← you are here (the story)
+docs/methodology.md       ← blinding + scoring math
+00-design/                ← scorecard, prompt, rubrics
+01-inventory/             ← frozen feature lists
+02-test1-build/           ← rebuild contest + reaudit + tie-break
+03-test2-detection/       ← seeded bug hunt
+04-test3-fix/            ← vague-symptom fixes
+05-final/                 ← FINAL-REPORT, deviations, decision log
+```
+
+Each numbered folder has its own short `README.md`.
 
 **Not in this public repo:** full `rebuild-a` / `rebuild-b` source trees, `node_modules`, DB dumps, the seeded bug ledger, or secrets. Those stay in the private MenEZmanim experiment workspace.
 
@@ -240,8 +244,8 @@ Deviations log: [`artifacts/results/DEVIATIONS.md`](artifacts/results/DEVIATIONS
 
 ## How you could replicate
 
-1. Freeze an inventory (or reuse ours under `artifacts/inventory/`).  
-2. Lock a scorecard and contestant prompt before spawning builders.  
+1. Freeze an inventory (or reuse ours under [`01-inventory/`](01-inventory/)).  
+2. Lock a scorecard and contestant prompt before spawning builders ([`00-design/`](00-design/)).  
 3. Give each model an isolated workspace; forbid git from contestants.  
 4. Use **one** third-party reviewer family for all phase gates *or* accept bias and document it.  
 5. Keep both finals until a single full-inventory pass exists.  

@@ -4,11 +4,11 @@ Rate **both** arms independently. Do **not** guess or mention which model built 
 
 ## Required reading (IN FULL before scoring)
 
-1. `results/SCORECARD.md` — Test 1 criteria
-2. `inventory/FEATURE-INVENTORY.md` + `inventory/EDITOR-INVENTORY.md` — frozen IDs
+1. `00-design/scorecard.md` — Test 1 criteria
+2. `01-inventory/FEATURE-INVENTORY.md` + `EDITOR-INVENTORY.md` — frozen IDs
 3. Each arm: `STATUS.md`, `PHASE-PLAN.md`, `DECISION-LOG.md`
 4. Spot-check code under each arm for claimed coverage (admin, display, sync, desktop, import)
-5. Optionally skim `results/phase-reviews/` for discipline/context signals — do not treat prior scores as your own
+5. Optionally skim `02-test1-build/phase-reviews-original/` for discipline/context signals — do not treat prior scores as your own
 
 ## Deliverable structure
 

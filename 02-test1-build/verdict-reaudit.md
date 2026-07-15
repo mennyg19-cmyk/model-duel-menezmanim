@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-15  
 **Reviewer model (all gates + both finals):** `glm-5.2-high`  
-**Method:** Restore each phase-complete commit into `_experiment/audit/snapshots/`, review with identical rubric; then full inventory audit of each P12 tree. Original Terra/Sonnet phase reviews retained under `results/phase-reviews/` as appendix only.
+**Method:** Restore each phase-complete commit into private audit snapshots, review with identical rubric; then full inventory audit of each P12 tree. Original Terra/Sonnet phase reviews retained under `phase-reviews-original/` as appendix only.
 
 ## Phone summary
 
@@ -32,7 +32,7 @@ Tests 2–3 unchanged (identical cloned trees). Overall winner remains **Sol**.
 | security_stubs | 4 | 4 | 4 |
 | **total** | **37** | **37** | **40** |
 
-Sources: `results/reaudit/FULL-A.md`, `FULL-B.md`.
+Sources: `reaudit/FULL-A.md`, `reaudit/FULL-B.md`.
 
 Note: identical full-table scores reduce discrimination; phase trail is the main differentiator in this pass.
 
@@ -57,7 +57,7 @@ Does **not** change official Test 1 points above. See `reaudit/TIEBREAK-*.md`.
 | code_quality | **7.92** | 7.83 |
 | **mean of dims** | 8.51 | **8.65** |
 
-All 24 reports: `results/reaudit/phase-reviews/rebuild-{a|b}-phase-01.md` … `-12.md`.
+All 24 reports: `reaudit/phase-reviews/rebuild-{a|b}-phase-01.md` … `-12.md`.
 
 Notable late-phase gaps (examples):
 - A P11: F-I18N3 partial / hardcoded `t("en")` on dashboard (inventory 6).

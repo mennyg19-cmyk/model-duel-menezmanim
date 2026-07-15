@@ -9,7 +9,7 @@
 | Grok 4.5 | 32 | **37** | **rebuild-b** — desktop BeeZee/LAN/EW depth; A overclaims preview-only DK |
 | Kimi K2.7 | **33** | 29 | **rebuild-a** — test suite + safer trust boundary; B hardcodes demo-owner login |
 
-**Sources:** [`TIEBREAK-GROK.md`](../artifacts/results/reaudit/TIEBREAK-GROK.md), [`TIEBREAK-KIMI.md`](../artifacts/results/reaudit/TIEBREAK-KIMI.md).
+**Sources:** [`reaudit/TIEBREAK-GROK.md`](reaudit/TIEBREAK-GROK.md), [`reaudit/TIEBREAK-KIMI.md`](reaudit/TIEBREAK-KIMI.md).
 
 ## What they disagreed about
 

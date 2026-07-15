@@ -38,5 +38,5 @@ Minimality notes: Fable removed six always-on rule files from `.cursor/rules` (u
 
 ## Sources
 
-- `results/fixes/rebuild-a.md`
-- `results/fixes/rebuild-b.md`
+- `fable-fixes.md`
+- `sol-fixes.md`
