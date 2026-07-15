@@ -1,0 +1,70 @@
+{
+  "name": "menezmanim-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MenEZmanim desktop, LAN, and kiosk runtime",
+  "author": "MenEZmanim",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron scripts/smoke.cjs",
+    "predist": "node scripts/stage-web.cjs",
+    "dist": "npx -y node@22.23.1 node_modules/electron-builder/cli.js --win nsis",
+    "predist:all": "node scripts/stage-web.cjs",
+    "dist:all": "npx -y node@22.23.1 node_modules/electron-builder/cli.js -mwl"
+  },
+  "dependencies": {
+    "express": "5.2.1"
+  },
+  "devDependencies": {
+    "electron": "41.7.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "org.menezmanim.desktop",
+    "productName": "MenEZmanim",
+    "artifactName": "MenEZmanim-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "ui/**/*",
+      "mobile/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".web-runtime",
+        "to": "web"
+      },
+      {
+        "from": "../prisma/dev.db",
+        "to": "seed/zmanim.db"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png"
+    }
+  }
+}

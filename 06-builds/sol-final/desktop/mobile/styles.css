@@ -1,0 +1,99 @@
+:root {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #f9f4e7;
+  background: #08130f;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+header,
+main,
+footer {
+  width: min(700px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+header {
+  padding: 32px 0 18px;
+}
+
+header p {
+  margin: 0;
+  color: #72d8ad;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 5px 0;
+  font-family: Georgia, serif;
+  font-size: clamp(32px, 10vw, 54px);
+}
+
+time,
+footer {
+  color: #a9b7b0;
+}
+
+main {
+  display: grid;
+  gap: 16px;
+}
+
+section {
+  overflow: hidden;
+  border: 1px solid #274a3e;
+  border-radius: 14px;
+  background: #10251e;
+}
+
+h2 {
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid #274a3e;
+  color: #72d8ad;
+  font-size: 15px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  padding: 13px 18px;
+  border-top: 1px solid rgb(114 216 173 / 12%);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row small {
+  display: block;
+  margin-top: 3px;
+  color: #a9b7b0;
+}
+
+.time {
+  color: #f3c56b;
+  font-weight: 800;
+}
+
+.empty,
+.list {
+  padding: 16px 18px;
+}
+
+.list:has(.row) {
+  padding: 0;
+}
+
+footer {
+  padding: 24px 0 40px;
+  text-align: center;
+  font-size: 12px;
+}

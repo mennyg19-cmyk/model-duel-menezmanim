@@ -6,7 +6,7 @@
 **Overall winner:** GPT-5.6 Sol high — **82 / 100** vs Claude Fable 5 high — **72.5 / 100**  
 **Domain:** MenEZmanim (synagogue display / zmanim / admin / desktop kiosk stack)
 
-This repo is the **public write-up and scored artifacts**. The full app trees and phase snapshots live in a private working tree; what matters for replication and critique is here: prompts, rubrics, inventories, review reports, and the score trail.
+This repo is the **public write-up, scored artifacts, and both finished Test 1 source trees**. What matters for replication and critique is here: prompts, rubrics, inventories, review reports, the score trail, and the actual apps each model shipped.
 
 ---
 
@@ -228,17 +228,21 @@ Deviations log: [`05-final/DEVIATIONS.md`](05-final/DEVIATIONS.md).
 ```
 README.md                 ← you are here (the story)
 docs/methodology.md       ← blinding + scoring math
+docs/token-usage.md       ← why we don’t have per-build token totals
 00-design/                ← scorecard, prompt, rubrics
 01-inventory/             ← frozen feature lists
 02-test1-build/           ← rebuild contest + reaudit + tie-break
 03-test2-detection/       ← seeded bug hunt
 04-test3-fix/            ← vague-symptom fixes
 05-final/                 ← FINAL-REPORT, deviations, decision log
+06-builds/                ← full P12 source trees (Fable + Sol finals)
 ```
 
 Each numbered folder has its own short `README.md`.
 
-**Not in this public repo:** full `rebuild-a` / `rebuild-b` source trees, `node_modules`, DB dumps, the seeded bug ledger, or secrets. Those stay in the private MenEZmanim experiment workspace.
+**Published builds:** [`06-builds/fable-final/`](06-builds/fable-final/) and [`06-builds/sol-final/`](06-builds/sol-final/) are the Test 1 Phase-12 trees **before** the winner clone used for Tests 2–3. No `node_modules`.
+
+**Not in this public repo:** Test 2/3 cloned/bugged trees, DB dumps, the seeded bug ledger, or secrets.
 
 ---
 

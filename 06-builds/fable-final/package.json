@@ -1,0 +1,39 @@
+{
+  "name": "menezmanim-rebuild-a",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MenEZmanim rebuild, experiment arm A. Phase 1: schema + core engine + public compute APIs.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3101",
+    "build": "next build",
+    "start": "next start -p 3101",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate-style-schedules": "tsx src/db/migrate-style-schedules.ts",
+    "db:seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "0.17.3",
+    "drizzle-orm": "0.45.2",
+    "kosher-zmanim": "0.9.0",
+    "luxon": "3.7.2",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "3.25.76",
+    "zustand": "5.0.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "3.7.1",
+    "@types/node": "20.19.0",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "drizzle-kit": "0.31.10",
+    "tsx": "4.20.6",
+    "typescript": "5.7.2",
+    "vitest": "3.2.4"
+  }
+}

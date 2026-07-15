@@ -1,0 +1,63 @@
+{
+  "name": "@menezmanim/desktop-rebuild-a",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Electron desktop shell (R10) for rebuild-a. Electron + libSQL + electron-builder live HERE only — never a dependency of the Next web package (F-DESKTOP-VERCEL).",
+  "type": "module",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "prepare:standalone": "node scripts/prepare-standalone.mjs",
+    "package": "node scripts/prepare-standalone.mjs && electron-builder --win nsis",
+    "typecheck": "echo \"desktop is CJS; web package owns TS\"",
+    "test": "echo \"desktop smoke: npm start after prepare:standalone\""
+  },
+  "dependencies": {
+    "@libsql/client": "0.17.3",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "electron": "37.10.3",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.menezmanim.desktop.rebuild-a",
+    "productName": "MenEZmanim",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!resources",
+      "!dist",
+      "!scripts"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/app-server",
+        "to": "app-server"
+      },
+      {
+        "from": "resources/drizzle",
+        "to": "drizzle"
+      },
+      {
+        "from": "resources/seed",
+        "to": "seed"
+      },
+      {
+        "from": "resources/icons",
+        "to": "icons"
+      }
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

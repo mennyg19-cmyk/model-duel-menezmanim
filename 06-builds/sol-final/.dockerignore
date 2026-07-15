@@ -1,0 +1,9 @@
+desktop/
+.git/
+.next/
+.scratch/
+node_modules/
+prisma/dev.db*
+public/uploads/
+*.log
+.env*

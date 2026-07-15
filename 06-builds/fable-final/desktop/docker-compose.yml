@@ -1,0 +1,30 @@
+# DK2 — self-hosted Docker (Next + Postgres). Session auth, not Clerk (DECIDED Phase 12).
+# Rebuild-a default remains local file: SQLite on 3101; this compose is the Docker mode path.
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: desktop/Dockerfile
+    ports:
+      - "3101:3000"
+    environment:
+      DATABASE_URL: postgresql://menez:menez@db:5432/menezmanim
+      AUTH_MODE: session
+      AUTH_SECRET: change-me-in-production
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: menez
+      POSTGRES_PASSWORD: menez
+      POSTGRES_DB: menezmanim
+    ports:
+      - "8101:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

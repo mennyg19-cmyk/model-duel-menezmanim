@@ -1,0 +1,370 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id                    String   @id @default(cuid())
+  name                  String
+  slug                  String   @unique
+  status                String   @default("pending")
+  latitude              Float
+  longitude             Float
+  elevation             Float    @default(0)
+  timezone              String
+  dialect               String   @default("Ashkenazi")
+  candleLightingMinutes Int      @default(18)
+  shabbatEndType        String   @default("degrees")
+  shabbatEndValue       Float    @default(8.5)
+  rabbeinu_tam_minutes  Int      @default(72)
+  amPmFormat            Boolean  @default(false)
+  inIsrael              Boolean  @default(false)
+  settings              String   @default("{}")
+  plan                  String   @default("free")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  screens         Screen[]
+  memberships     OrgMembership[]
+  styles          Style[]
+  scheduleGroups  ScheduleGroup[]
+  zmanimConfigs   ZmanimConfig[]
+  minyanSchedules MinyanSchedule[]
+  announcements   Announcement[]
+  memorials       Memorial[]
+  sponsors        Sponsor[]
+  media           Media[]
+  syncLogs        SyncLog[]
+  invites         OrgInvite[]
+  editLock        EditLock?
+  notes           TukachinskyNote[]
+}
+
+model Screen {
+  id              String    @id @default(cuid())
+  name            String
+  orgId           String
+  assignedStyleId String?
+  styleSchedules  String?
+  isActive        Boolean   @default(true)
+  resolution      String    @default("1920x1080")
+  lastSeenAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignedStyle Style?       @relation(fields: [assignedStyleId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  clerkUserId  String   @unique
+  email        String   @unique
+  name         String
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships OrgMembership[]
+  editLocks   EditLock[]
+}
+
+model OrgMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  role      String   @default("editor")
+  createdAt DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+model OrgInvite {
+  id        String    @id @default(cuid())
+  orgId     String
+  email     String
+  role      String    @default("editor")
+  token     String    @unique @default(cuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([email])
+}
+
+model EditLock {
+  id        String   @id @default(cuid())
+  orgId     String   @unique
+  userId    String
+  lockedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Style {
+  id                       String   @id @default(cuid())
+  name                     String
+  orgId                    String
+  backgroundImage          String?
+  backgroundColor          String   @default("#0f172a")
+  backgroundMode           String   @default("solid")
+  backgroundGradient       String?
+  backgroundTexture        String?
+  backgroundFrameId        String?
+  backgroundFrameThickness Float?   @default(1.0)
+  canvasWidth              Int      @default(1920)
+  canvasHeight             Int      @default(1080)
+  isDefault                Boolean  @default(false)
+  activationRules          String
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  displayObjects DisplayObject[]
+  screens        Screen[]
+
+  @@index([orgId])
+}
+
+model DisplayObject {
+  id                      String   @id @default(cuid())
+  styleId                 String
+  name                    String
+  type                    String
+  posX                    Int
+  posY                    Int
+  width                   Int
+  height                  Int
+  layer                   Int      @default(0)
+  fontFamily              String   @default("David Libre")
+  fontSize                Int      @default(16)
+  fontBold                Boolean  @default(false)
+  fontItalic              Boolean  @default(false)
+  foreColor               String   @default("#000000")
+  backColor               String   @default("transparent")
+  language                String   @default("hebrew")
+  textAlign               String   @default("center")
+  verticalAlign           String   @default("middle")
+  lineHeight              Float?
+  backgroundMode          String   @default("transparent")
+  backgroundImage         String?
+  backgroundGradient      String?
+  backgroundTexture       String?
+  frameId                 String?
+  frameThickness          Float    @default(0)
+  scrollingEnabled        Boolean  @default(false)
+  scrollingDirection      String   @default("up")
+  scrollingSpeed          Int      @default(60)
+  content                 String?
+  scheduleRules           String?
+  scheduleGroupVisibility String?
+  visible                 Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  style Style @relation(fields: [styleId], references: [id], onDelete: Cascade)
+
+  @@index([styleId])
+}
+
+model ScheduleGroup {
+  id                  String   @id @default(cuid())
+  orgId               String
+  name                String
+  hebrewName          String
+  color               String
+  active              Boolean  @default(true)
+  autoActivationRules String?
+  sortOrder           Int
+  isBuiltIn           Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model ZmanimConfig {
+  id           String   @id @default(cuid())
+  orgId        String
+  zmanType     String
+  authority    String
+  degreesBelow Float?
+  fixedMinutes Int?
+  earliest     String?
+  latest       String?
+  roundTo      Int?
+  offset       Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, zmanType])
+}
+
+model MinyanSchedule {
+  id               String   @id @default(cuid())
+  orgId            String
+  name             String
+  hebrewName       String
+  type             String
+  baseZman         String?
+  fixedTime        String?
+  offset           Int      @default(0)
+  earliest         String?
+  latest           String?
+  roundTo          Int      @default(5)
+  room             String?
+  dayOfWeekMask    String   @default("1111111")
+  scheduleGroupIds String?
+  details          String?
+  isActive         Boolean  @default(true)
+  sortOrder        Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Announcement {
+  id            String   @id @default(cuid())
+  orgId         String
+  title         String
+  titleHebrew   String?
+  content       String
+  contentHebrew String?
+  scheduleRules String?
+  priority      Int      @default(0)
+  isActive      Boolean  @default(true)
+  startDate     String?
+  endDate       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Memorial {
+  id               String    @id @default(cuid())
+  orgId            String
+  hebrewName       String
+  englishName      String?
+  hebrewFamilyName String?
+  hebrewBenBat     String?
+  hebrewYear       Int?
+  hebrewMonth      Int
+  hebrewDay        Int
+  hebrewAdar       Int       @default(0)
+  civilDate        DateTime?
+  isYahrzeit       Boolean   @default(true)
+  donorInfo        String?
+  notes            String?
+  relationship     String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Sponsor {
+  id             String    @id @default(cuid())
+  orgId          String
+  type           String
+  sponsorName    String
+  hebrewText     String?
+  englishText    String?
+  hebrewDate     String?
+  civilDate      DateTime?
+  isRecurring    Boolean   @default(false)
+  recurrenceRule String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Media {
+  id            String   @id @default(cuid())
+  orgId         String
+  filename      String
+  originalName  String
+  mimeType      String
+  fileSize      Int
+  filePath      String
+  scheduleRules String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model TukachinskyNote {
+  id              String   @id @default(cuid())
+  orgId           String?
+  overridesNoteId String?
+  hebrewMonth     Int
+  hebrewDay       Int
+  noteHebrew      String
+  noteEnglish     String?
+  category        String
+  source          String?
+  isActive        Boolean  @default(true)
+  isHidden        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([hebrewMonth, hebrewDay])
+}
+
+model SyncLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  tableName String
+  recordId  String
+  operation String
+  data      String
+  timestamp DateTime @default(now())
+  clientTimestamp DateTime?
+  synced    Boolean  @default(false)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([synced])
+  @@index([orgId, tableName, recordId, timestamp])
+}

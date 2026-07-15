@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MenEZmanim Desktop</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">MenEZmanim Desktop</p>
+          <h1>Display control</h1>
+          <p class="lede">Choose how this computer runs the board, admin, and LAN mobile view.</p>
+        </div>
+        <span id="modeBadge">Loading…</span>
+      </header>
+
+      <section class="mode-grid" aria-label="Application mode">
+        <label>
+          <input type="radio" name="mode" value="fully-local" />
+          <strong>Fully local</strong>
+          <span>SQLite, admin, display, and LAN work without cloud access.</span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="hybrid" />
+          <strong>Hybrid</strong>
+          <span>Local-first operation with durable cloud pull and push.</span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="display-only" />
+          <strong>Display only</strong>
+          <span>Kiosk window points at a remote MenEZmanim board.</span>
+        </label>
+      </section>
+
+      <section class="card fields">
+        <label>Organization slug <input id="orgSlug" /></label>
+        <label>Screen ID <input id="screenId" /></label>
+        <label>Local web port <input id="webPort" type="number" min="1024" max="65535" /></label>
+        <label>LAN API port <input id="lanPort" type="number" min="1024" max="65535" /></label>
+        <label class="wide">Remote display URL <input id="remoteDisplayUrl" type="url" /></label>
+        <label class="wide">Cloud origin <input id="cloudOrigin" type="url" placeholder="https://example.org" /></label>
+        <label>Cloud organization ID <input id="cloudOrgId" /></label>
+        <label>Screen credential <input id="screenCredential" type="password" /></label>
+        <label class="toggle"><input id="kiosk" type="checkbox" /> Kiosk/fullscreen display</label>
+        <label class="toggle"><input id="autoStart" type="checkbox" /> Start when this user signs in</label>
+      </section>
+
+      <section class="card runtime">
+        <div><span>Database</span><code id="dbPath">Loading…</code></div>
+        <div><span>LAN mobile URL</span><a id="lanUrl">Unavailable</a></div>
+        <div><span>Sync</span><strong id="syncStatus">Local mode</strong></div>
+      </section>
+
+      <div class="actions">
+        <button id="save" class="primary">Save settings</button>
+        <button id="restart">Restart desktop</button>
+        <button id="openAdmin">Open admin</button>
+        <button id="importBeeZee">Import BeeZee files</button>
+      </div>
+      <p id="message" role="status" aria-live="polite"></p>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>
