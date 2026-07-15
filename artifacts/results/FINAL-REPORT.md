@@ -110,7 +110,7 @@ Both restored correct root causes for all nine symptoms with live verification c
 
 ## Qualitative observations
 
-1. **Reviewer design matters:** Split Terra/Sonnet mid-build reviews + contestant-model blind finals produced a 4.5-pt Test 1 gap; one GLM reviewer on restored gates made the builds nearly tied.
+1. **Reviewer design matters:** Split Terra/Sonnet mid-build reviews + contestant-model blind finals produced a 4.5-pt Test 1 gap; one GLM reviewer on restored gates made the builds nearly tied; Grok and Kimi then disagreed (B vs A) on the same finals.
 2. **Detection still separates them:** On identical code, Sol found more seeded logic/sync bugs (Test 2).
 3. **Vague fix:** Both excellent at symptom → root cause; Fable’s unrelated `.cursor/rules` deletion cost points.
 4. **Auth debt:** Sol’s passwordless login remains a release blocker and was not one of the nine seeded bugs.
