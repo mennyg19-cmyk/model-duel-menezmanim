@@ -228,7 +228,8 @@ Deviations log: [`05-final/DEVIATIONS.md`](05-final/DEVIATIONS.md).
 ```
 README.md                 ← you are here (the story)
 docs/methodology.md       ← blinding + scoring math
-docs/token-usage.md       ← why we don’t have per-build token totals
+docs/token-usage.md       ← short answer + link to CSV analysis
+docs/token-usage-from-csv.md ← windowed tokens aligned to git timeline
 00-design/                ← scorecard, prompt, rubrics
 01-inventory/             ← frozen feature lists
 02-test1-build/           ← rebuild contest + reaudit + tie-break

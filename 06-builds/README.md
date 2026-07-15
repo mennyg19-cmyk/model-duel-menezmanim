@@ -25,4 +25,4 @@ Each arm is a Next.js app; ports used in the experiment were **3101 (Fable)** an
 
 ## Token usage
 
-Per-build token counts were **not logged during the run**. See [../docs/token-usage.md](../docs/token-usage.md).
+Per-build totals recovered from Cursor’s 2026-07-15 usage CSV, aligned to git timestamps: [../docs/token-usage-from-csv.md](../docs/token-usage-from-csv.md).
