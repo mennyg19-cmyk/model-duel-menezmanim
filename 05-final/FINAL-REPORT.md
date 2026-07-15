@@ -12,6 +12,8 @@ Original published total was 76 vs 62.5. After a **GLM 5.2 single-reviewer reaud
 
 Sol won detection (Test 2) clearly; both nailed all nine vague-fix root causes (Test 3), with Sol slightly cleaner on scope. Fable’s original arm had better password auth and a real test suite. Contestant prompt allowed reference-app harvest — Test 1 was not pure greenfield.
 
+**Cost (Cursor On-Demand):** Sol is cheaper per token on list price, but the Test 1 rebuild still cost more in dollars (~**$49** Sol vs ~**$14** Fable). See `../docs/token-usage-from-csv.md`.
+
 ## Model mapping (revealed)
 
 | Slot | Model |
@@ -115,6 +117,7 @@ Both restored correct root causes for all nine symptoms with live verification c
 3. **Vague fix:** Both excellent at symptom → root cause; Fable’s unrelated `.cursor/rules` deletion cost points.
 4. **Auth debt:** Sol’s passwordless login remains a release blocker and was not one of the nine seeded bugs.
 5. **Not greenfield:** Prompt invited reference harvest; any “who builds better from inventory alone” claim needs a locked no-reference re-run.
+6. **Cheaper tokens ≠ cheaper job:** Sol’s list price is lower per MTok, but Cursor billed ~$49 for Sol’s Test 1 build vs ~$14 for Fable — volume dominated the unit discount.
 
 ## Artifacts
 
@@ -126,7 +129,9 @@ Both restored correct root causes for all nine symptoms with live verification c
 | Test 2 | `../03-test2-detection/VERDICT.md` |
 | Test 3 | `../04-test3-fix/VERDICT.md` |
 | Phase reviews (original) | `../02-test1-build/phase-reviews-original/` |
-| Arms | private working tree only (not in this public repo) |
+| Builds (P12 finals) | `../06-builds/` |
+| Token + $ cost | `../docs/token-usage-from-csv.md` |
+| Arms | also under `../06-builds/` (pre Test 2/3 clone) |
 
 ## Deviations
 

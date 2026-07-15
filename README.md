@@ -23,6 +23,8 @@ Two flagship coding models each rebuilt the same product from a frozen feature i
 
 Sol won. The interesting part is *where*: the builds were nearly tied once we fixed a reviewer bias, but Sol pulled ahead hard on finding seeded bugs in the same codebase.
 
+**Cost:** Sol is cheaper per token on list price, but this rebuild still cost more in Cursor dollars (~**$49** Sol vs ~**$14** Fable for Test 1 build). Details: [`docs/token-usage-from-csv.md`](docs/token-usage-from-csv.md).
+
 ---
 
 ## Why run this
@@ -204,6 +206,7 @@ Full narrative report: [`05-final/FINAL-REPORT.md`](05-final/FINAL-REPORT.md).
 3. **Vague-fix quality is high on both, with different failure modes.** Both found every seeded root cause. Scope control (don’t delete the rulebook) still mattered.
 4. **Auth debt can hide in a “winning” build.** Sol won Test 1 originally while shipping passwordless login. Winning a rebuild contest is not a release sign-off.
 5. **Reference harvest contaminates “greenfield” claims.** Sol logged using prior apps. Fair for “rebuild MenEZmanim with help from the old tree”; unfair for “who invents better from an inventory alone.”
+6. **Cheaper per token ≠ cheaper rebuild.** Sol’s list price is lower, but Cursor billed ~$49 vs ~$14 for the Test 1 builds — Sol still cost more because of volume.
 
 ---
 

@@ -19,6 +19,21 @@
 
 **Sol’s Test 1 build is ~9.5× Fable on Total** and **~2.3× on Output**, in a window that matches the rebuild (Sol also ran longer — Phase 12 finished ~70 minutes after Fable, plus a mid–Phase 7 resume after `resource_exhausted`).
 
+## Dollar cost (Cursor `Cost` column)
+
+Sol is **cheaper per token** on API list rates (about **$5 / $30** per MTok input/output vs Fable’s about **$10 / $50**). On this run that did **not** make Sol the cheaper build — volume won.
+
+| Window | Fable (Cursor $) | Sol (Cursor $) |
+|---|---:|---:|
+| **Test 1 build** (scaffold → blind) | **~$14** (`$13.65` one row) | **~$49** (six rows summed) |
+| Test 2 detect | $2.52 | $2.50 |
+| Test 3 fix | $6.84 | $4.62 |
+| All contestant-high rows that day (incl. blind) | ~$42 | ~$61 |
+
+Source: same CSV `Kind=On-Demand` / `Cost` fields on the `*-thinking-high` / `sol-high` rows listed in the event log below. Pre-scaffold Fable `$2.29` is **not** in the Test 1 build total.
+
+**Takeaway:** cheaper unit price ≠ cheaper job. Sol’s rebuild still cost ~**3.5×** Fable in Cursor dollars.
+
 ---
 
 ## Timeline anchors (git)
@@ -53,29 +68,29 @@ CSV event times for Fable/Sol **line up with these windows** (see event log belo
 
 ### `claude-fable-5-thinking-high`
 
-| UTC | Israel | Phase (inferred) | Total | Output |
-|---|---|---|---:|---:|
-| 06:22:11 | 09:22 | Pre-scaffold (excluded from build total) | 0.62M | 9k |
-| 06:39:55 | 09:39 | **Test 1 build (whole arm, one line)** | **7.71M** | **76k** |
-| 12:55:51 | 15:55 | Blind final | 2.31M | 9k |
-| 13:00:47 | 16:00 | Blind final (2nd) | 10.07M | 26k |
-| 13:19:29 | 16:19 | Test 2 detect | 1.86M | 17k |
-| 13:26:10 | 16:26 | Test 3 fix | 4.06M | 30k |
+| UTC | Israel | Phase (inferred) | Total | Output | Cursor $ |
+|---|---|---|---:|---:|---:|
+| 06:22:11 | 09:22 | Pre-scaffold (excluded from build total) | 0.62M | 9k | $2.29 |
+| 06:39:55 | 09:39 | **Test 1 build (whole arm, one line)** | **7.71M** | **76k** | **$13.65** |
+| 12:55:51 | 15:55 | Blind final | 2.31M | 9k | $4.71 |
+| 13:00:47 | 16:00 | Blind final (2nd) | 10.07M | 26k | $12.03 |
+| 13:19:29 | 16:19 | Test 2 detect | 1.86M | 17k | $2.52 |
+| 13:26:10 | 16:26 | Test 3 fix | 4.06M | 30k | $6.84 |
 
 ### `gpt-5.6-sol-high`
 
-| UTC | Israel | Phase (inferred) | Total | Output |
-|---|---|---|---:|---:|
-| 06:39:50 | 09:39 | Test 1 build | 7.40M | 34k |
-| 10:10:35 | 13:10 | Test 1 build | 21.78M | 52k |
-| 11:32:14 | 14:32 | Test 1 build | 7.85M | 29k |
-| 11:48:06 | 14:48 | Test 1 build (editor / P7 era) | 18.84M | 40k |
-| 12:11:44 | 15:11 | Test 1 build | 16.39M | 13k |
-| 12:29:38 | 15:29 | Test 1 build (near P12) | 1.16M | 9k |
-| 12:55:39 | 15:55 | Blind final | 2.57M | 8k |
-| 13:00:33 | 16:00 | Blind final (2nd) | 3.80M | 9k |
-| 13:19:28 | 16:19 | Test 2 detect | 2.00M | 12k |
-| 13:26:10 | 16:26 | Test 3 fix | 6.74M | 14k |
+| UTC | Israel | Phase (inferred) | Total | Output | Cursor $ |
+|---|---|---|---:|---:|---:|
+| 06:39:50 | 09:39 | Test 1 build | 7.40M | 34k | $6.02 |
+| 10:10:35 | 13:10 | Test 1 build | 21.78M | 52k | $13.83 |
+| 11:32:14 | 14:32 | Test 1 build | 7.85M | 29k | $5.56 |
+| 11:48:06 | 14:48 | Test 1 build (editor / P7 era) | 18.84M | 40k | $12.29 |
+| 12:11:44 | 15:11 | Test 1 build | 16.39M | 13k | $10.11 |
+| 12:29:38 | 15:29 | Test 1 build (near P12) | 1.16M | 9k | $1.60 |
+| 12:55:39 | 15:55 | Blind final | 2.57M | 8k | $2.63 |
+| 13:00:33 | 16:00 | Blind final (2nd) | 3.80M | 9k | $2.28 |
+| 13:19:28 | 16:19 | Test 2 detect | 2.00M | 12k | $2.50 |
+| 13:26:10 | 16:26 | Test 3 fix | 6.74M | 14k | $4.62 |
 
 ---
 
@@ -96,7 +111,7 @@ CSV event times for Fable/Sol **line up with these windows** (see event log belo
 
 ## What we’d claim in a friend write-up
 
-> On Cursor’s 2026-07-15 usage export, restricted to the Test 1 rebuild window (git scaffold → blind finals), **Sol-high used ~73M total tokens / ~179k output** across 6 billed events, while **Fable-high used ~7.7M total / ~76k output** on a single aggregated event. Detection was similar (~2M each). Vague-fix: Sol 6.7M vs Fable 4.1M total. Cache reads dominate Total; Output is the fairer generation metric. Billing granularity for Fable is coarse — do not read “1 event” as “1 phase.”
+> On Cursor’s 2026-07-15 usage export, restricted to the Test 1 rebuild window (git scaffold → blind finals), **Sol-high used ~73M total tokens / ~179k output / ~$49** across 6 billed events, while **Fable-high used ~7.7M total / ~76k output / ~$14** on a single aggregated event. Sol is cheaper per token on list price; volume still made Sol the more expensive rebuild (~3.5× in Cursor dollars). Detection was similar (~$2.50 each). Vague-fix: Fable $6.84 vs Sol $4.62. Cache reads dominate Total; Output is the fairer generation metric. Billing granularity for Fable is coarse — do not read “1 event” as “1 phase.”
 
 ---
 
