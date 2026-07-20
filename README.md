@@ -6,7 +6,7 @@
 **Overall winner:** GPT-5.6 Sol high — **82 / 100** (reaudit) vs Claude Fable 5 high — **72.5 / 100**  
 **Domain:** MenEZmanim (synagogue display / zmanim / admin / desktop kiosk stack)
 
-**Next run (not started):** use the reusable harness → https://github.com/mennyg19-cmyk/agent-duel-harness (`start testing`). Historical v2 notes also in [`EXPERIMENT-PLAN-v2.md`](EXPERIMENT-PLAN-v2.md).
+**Next run (not started):** use **Master Model Duel** → https://github.com/mennyg19-cmyk/master-model-duel (`start testing`). Historical v2 notes also in [`EXPERIMENT-PLAN-v2.md`](EXPERIMENT-PLAN-v2.md).
 
 This repo is the **public write-up, scored artifacts, and both finished Test 1 source trees** for the v1 duel. What matters for replication and critique is here: prompts, rubrics, inventories, review reports, the score trail, and the actual apps each model shipped.
 
