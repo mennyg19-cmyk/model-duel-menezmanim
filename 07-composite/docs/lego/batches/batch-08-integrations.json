@@ -1,0 +1,332 @@
+[
+  {
+    "id": "R-166",
+    "name": "Stripe hosted checkout session",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/payments/stripe.ts: fetch-based realGateway/mockGateway behind PaymentGateway type, immediate-capture Checkout Session, mock mode posts a SIGNED event through the real webhook route so signature+idempotency run identically. Fail-closed: throws if prod has no STRIPE_SECRET_KEY."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 (lib/payments/stripe.ts untouched by the arm-04 diff set)."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/payments/stripe.ts is not one of arm-04's 6 diffed files vs arm-02/03 — identical."},
+      "arm-05": {"score": 6, "flags": [], "note": "lib/checkout.ts createProviderCheckout(): inline fetch to /v1/checkout/sessions, capture_method automatic, local-harness fallback session. Functional but calls are inlined directly in the checkout module rather than isolated in a dedicated Stripe wrapper (see R-170)."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/payments/stripe.ts createCheckoutSession(): idempotency key keyed on order+frozen amount (checkout-{orderId}-{amountCents}), 400s mapped to DomainRuleError, StripeNotConfiguredError for graceful 503. Clean, well-isolated."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/payments/stripe.ts:60-123", "arm-05": "lib/checkout.ts:156-184", "arm-06": "lib/payments/stripe.ts:86-129"}
+  },
+  {
+    "id": "R-167",
+    "name": "Stripe payment webhook processing",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "app/api/webhooks/stripe/route.ts: zod-parsed event, signature check, pending->processing->processed idempotency ledger with a processing-grace reclaim window, handles checkout.session.completed/expired/charge.refunded/charge.refund.updated."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Not in arm-04's diffed file set — identical to arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "app/api/stripe/webhook/route.ts: HMAC-SHA256 signature check (own implementation, no SDK), webhookEvent unique-insert idempotency, handles checkout.session.completed/charge.refunded/payment_intent.canceled. Simpler than the clone cluster (no processing-claim grace window) but functionally sound."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/checkout/webhook.ts completeCheckoutSession(): zod-typed payload schemas, one-transaction commit (stock+finalize+payment+greeting), safetyRefund covers 5 distinct unsafe states."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/webhooks/stripe/route.ts:48-110", "arm-05": "app/api/stripe/webhook/route.ts:36-66", "arm-06": "lib/checkout/webhook.ts:71-143"}
+  },
+  {
+    "id": "R-168",
+    "name": "Stripe refund synchronization",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "handleChargeRefunded/handleRefund in webhook route: syncs embedded refunds list when Stripe includes it, else books the cumulative delta under a deterministic key so replays stay idempotent."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 6, "flags": [], "note": "markRefunded() in webhook route flips Payment.status to REFUNDED keyed on stripePaymentIntent; idempotent via unique webhookEvent row, but no cumulative-delta or embedded-refunds-list handling — a partial refund followed by a second partial refund isn't distinctly reconciled."},
+      "arm-06": {"score": 8, "flags": [], "note": "lib/checkout/webhook.ts syncChargeRefunded(): finds POSTED payment by externalRef, voidPaymentTx + audit row in one transaction. Simpler (full-void only, no partial-amount delta tracking) than the clone cluster's embedded-list/delta logic but correct for its own model."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/webhooks/stripe/route.ts:222-278", "arm-05": "app/api/stripe/webhook/route.ts:13-34", "arm-06": "lib/checkout/webhook.ts:154-177"}
+  },
+  {
+    "id": "R-169",
+    "name": "Stripe automatic safety refunds",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "autoRefund() in webhook route: full refund when charge amount/order status/session status mismatch, or when finalize fails post-payment (stock ran out) — books the charge row first if not already recorded, then refunds, flags refund_failed on gateway failure for manual reconciliation."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 7, "flags": [], "note": "refundSafetyPayment(), triggered from completeCheckout's SAFETY_REFUND_REQUIRED path (amount mismatch, order not DRAFT) and from the webhook route. Idempotency-keyed by payment intent. Fewer distinct trigger reasons than the clone cluster/arm-06 but the mechanism is sound."},
+      "arm-06": {"score": 9, "flags": [], "note": "safetyRefund() in lib/checkout/webhook.ts enumerates 5 distinct unsafe conditions (already finalized, discarded, session-id mismatch, amount mismatch, no reservation, season closed) each auditable with its own reason string; releases the reservation atomically with the audit row."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/webhooks/stripe/route.ts:286-327", "arm-05": "lib/checkout.ts:186-203", "arm-06": "lib/checkout/webhook.ts:36-66"}
+  },
+  {
+    "id": "R-170",
+    "name": "Shared Stripe server client (lazy singleton)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "getPaymentGateway() memoizes a module-level `gateway` on first call, real vs mock resolved once, fail-closed guard for prod without a key."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "No dedicated Stripe client module exists in lib/. Every Stripe call (createProviderCheckout, refundSafetyPayment, refundStripePayment) re-reads process.env.STRIPE_SECRET_KEY inline inside lib/checkout.ts — no isolation, no singleton/config cache."},
+      "arm-06": {"score": 9, "flags": [], "note": "getStripeConfig() caches a StripeConfig object in a module-level `stripeConfigCache`, plus a stripeDriverMode() seam (live/fixture/capture) for the reconciliation matcher — a genuinely richer singleton than the clone cluster's."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/payments/stripe.ts:111-123", "arm-05": "lib/checkout.ts:156-203 (no singleton)", "arm-06": "lib/payments/stripe.ts:38-65"}
+  },
+  {
+    "id": "R-171",
+    "name": "Resend email sender (SDK isolated)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/email/provider.ts: resend/mock/capture EmailProvider behind one type, fetch-based (no resend npm dep), +failonce/+failalways fixtures for retry testing."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/resend.ts: sendThroughResend()/isResendConfigured() isolated, fetch-based, idempotency-key header passthrough. Solid, comparable isolation to the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/email/resend.ts: cached getResendConfig() singleton, custom ResendNotConfiguredError/ResendSendError classes carrying HTTP status for callers to branch on."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/email/provider.ts:1-83", "arm-05": "lib/resend.ts:1-33", "arm-06": "lib/email/resend.ts:1-80"}
+  },
+  {
+    "id": "R-172",
+    "name": "Email log purge cron",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/api/cron/email-log-purge/route.ts: deletes sent/captured/failed Notification rows past a settings-driven retention window, anchored on updatedAt; live outbox rows never touched."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 7, "flags": [], "note": "purgeEmailLogs() in lib/email.ts: deletes EmailLog rows tied to DELIVERED/FAILED outbox older than a fixed 30-day constant, records an AuditEvent. Retention isn't settings-driven (hardcoded constant) unlike the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "purgeEmailLog() in lib/email/purge.ts: separate retention windows for SENT outbox rows (settings-driven) vs a much longer 365-day FAILED failure-trail, plus campaign recipients; writes a CronRun row with a human-readable summary message."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/cron/email-log-purge/route.ts:1-26", "arm-05": "lib/email.ts:203-212", "arm-06": "lib/email/purge.ts:25-57"}
+  },
+  {
+    "id": "R-173",
+    "name": "Shippo SDK wrapper (rate/buy/void/track/validate)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/shipping/shippo.ts: all 5 verbs (getRates/buyLabel/voidLabel/trackShipment/validateAddress) behind fetch, mock-mode fixtures, 15s AbortSignal timeout on every call, ShippoError class."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "shippo.ts identical to arm-01/02/03; the only arm-04-specific file in this area (lib/shipping/margin.ts) differs from arm-02's only by one trailing blank line — functionally identical, see R-174 note."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/shippo.ts: ShippoClient interface (fixture/live) covers all 5 verbs with zod-free but well-typed response parsing; fixture mode is deterministic per postal code."},
+      "arm-06": {"score": 5, "flags": ["BROKEN"], "note": "lib/shipping/shippo.ts itself is excellent standalone (zod-validated response schemas, clientMessage/server-log detail split, all 5 verbs) — but see R-174: its sibling lib/shipping/margin.ts is corrupted (byte-identical to the OTHER arms' single-arg CarrierRate-based margin.ts, git-diff confirms 0 lines differ from arm-01's), so lib/shipping/quotes.ts (which imports 5 names from margin.ts that do not exist there: GROUND_SERVICE_TOKENS, MarginResolution, normalizeRates, RateOption, and a resolveMargin with a mismatched signature) fails to typecheck. quotes.ts is imported by lib/checkout/shipping-quotes.ts and lib/shipping/labels.ts, which is imported by 8 more files including every label route and the checkout flow — this is a full `next build`-breaking defect, not a standalone-file quality issue. The wrapper itself would score 9 in isolation; scored down because nothing in the delivered tree can actually invoke it."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-01": "lib/shipping/shippo.ts:1-174", "arm-05": "lib/shippo.ts:1-245", "arm-06": "lib/shipping/shippo.ts (fine) + lib/shipping/margin.ts (broken, identical to arm-01's) + lib/shipping/quotes.ts:1-18 (imports non-existent exports)"}
+  },
+  {
+    "id": "R-174",
+    "name": "Shippo rate lookup + cheapest-rate selection",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/shipping/quotes.ts + lib/shipping/margin.ts: bin-packs items into parcels, calls getRates, resolveMargin() picks the cheapest-per-carrier best and charges the highest — pure, unit-testable, persisted as an expiring ShippingQuote."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE-DIFFERS-TRIVIALLY"], "note": "Diffed independently per instructions: `diff arm-02/lib/shipping/margin.ts arm-04/lib/shipping/margin.ts` shows only a trailing blank-line addition — logic is byte-for-byte identical (same resolveMargin, same bestByCarrier/perCarrierBest algorithm). Scored equal to the clone cluster."},
+      "arm-05": {"score": 8, "flags": [], "note": "selectMarginRate() in lib/shippo.ts: filters to ground-equivalent, non-expired, eligible-carrier rates, then picks highest-charge/cheapest-buy — same margin law as the clone cluster, slightly less rigorously separated (rate-expiry filter lives inside the selector rather than at the quote boundary) but fully functional and used end-to-end in lib/shipping.ts."},
+      "arm-06": {"score": 1, "flags": ["BROKEN"], "note": "This IS the corrupted subsystem: lib/shipping/margin.ts (checked via `git show` — introduced already-broken, byte-identical to arm-01's simpler single-arg CarrierRate version) does not export GROUND_SERVICE_TOKENS, MarginResolution, normalizeRates, or RateOption, and its resolveMargin(rates: CarrierRate[]) signature doesn't match the 3-arg call resolveMargin(options, config.includeUsps, groundTokens) in lib/shipping/quotes.ts. CarrierRate itself doesn't exist anywhere in arm-06's tree (its shippo.ts exports ShippoRate). scripts/test-p8.mts's own test calls (resolveMargin(rates, false)) also don't match the file's actual export — confirming the checked-in test suite was written against a different, correct margin.ts that is missing/overwritten. This is a real, verified TypeScript compile failure, not a style nit."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-01": "lib/shipping/quotes.ts:1-71, lib/shipping/margin.ts:1-33", "arm-05": "lib/shippo.ts:98-109", "arm-06": "lib/shipping/margin.ts:1-32 vs lib/shipping/quotes.ts:1-18 (export mismatch); git show 5fa93da -- lib/shipping/margin.ts confirms it was already broken at commit time"}
+  },
+  {
+    "id": "R-175",
+    "name": "Shippo label failure compensation",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "buyLabelForPackage(): advisory xact lock prevents double-buy, void-and-record on post-purchase DB write failure, recordFailedShipment() leaves a visible FAILED Shipment row without touching customer money."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (labels.ts untouched by arm-04's diffs)."},
+      "arm-05": {"score": 8, "flags": [], "note": "createPackageLabel() in lib/shipping.ts: try/catch void-on-persist-failure, and a second-level catch that records a VOID_FAILED ShipmentBox + audit row when even the compensating void throws — thorough double-failure handling."},
+      "arm-06": {"score": 2, "flags": ["BROKEN"], "note": "lib/shipping/labels.ts buyLabel()/resolveStuckShipment() logic is arguably the best-designed of all six arms (distinguishes carrier-sold-but-not-persisted from never-sold, a stuck-purchase sweep, crash-window compensation) — but the file imports quoteShipping from lib/shipping/quotes.ts, which fails to typecheck (see R-174). As delivered, this module cannot compile, so the feature is unreachable in a real build despite excellent logic on paper."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-01": "lib/shipping/labels.ts:91-227", "arm-05": "lib/shipping.ts:192-307", "arm-06": "lib/shipping/labels.ts:169-316 (depends on broken lib/shipping/quotes.ts)"}
+  },
+  {
+    "id": "R-176",
+    "name": "Shippo tracking refresh",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "refreshShipmentTracking(): fetches carrier status, maps failure to a clean ActionError instead of a 500."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 7, "flags": [], "note": "refreshPackageTracking() in lib/shipping.ts: refreshes carrier tracking, persists trackingStatus/lastTrackedAt, logs a PackageAudit row."},
+      "arm-06": {"score": 2, "flags": ["BROKEN"], "note": "refreshTracking() in lib/shipping/labels.ts is well-designed (an explicit allowTerminal flag so tracking keeps working once the carrier has the package, unlike buy/void) but the module transitively fails to typecheck via lib/shipping/quotes.ts (see R-174), so it cannot ship in a real build."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-01": "lib/shipping/labels.ts:296-320", "arm-05": "lib/shipping.ts:321-334", "arm-06": "lib/shipping/labels.ts:596-622"}
+  },
+  {
+    "id": "R-177",
+    "name": "Shippo address validation",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "validateAddress() in shippo.ts, called from buyLabelForPackage before any label purchase — carrier refusal surfaces as a clean error, no money moves."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 7, "flags": [], "note": "validateAddress() in lib/shippo.ts (fixture/live), invoked from validatePackageAddress() and inside createPackageLabel() before buying."},
+      "arm-06": {"score": 3, "flags": ["BROKEN"], "note": "shippo.ts's validateAddress() itself is fine standalone (doesn't import the broken margin.ts) and is used correctly in labels.ts's buyLabel()/validatePackageAddress() — but labels.ts as a whole fails to typecheck because it also imports the broken lib/shipping/quotes.ts (see R-174/R-175), so the staff-facing 'validate this address' feature is unreachable in the delivered build despite the underlying function being correct."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-01": "lib/shipping/shippo.ts:157-173, lib/shipping/labels.ts:109-112", "arm-05": "lib/shippo.ts:170-174, lib/shipping.ts:187-190", "arm-06": "lib/shipping/shippo.ts:284-295, lib/shipping/labels.ts:624-633 (module fails to compile)"}
+  },
+  {
+    "id": "R-178",
+    "name": "Idempotent email sending + test capture",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "captureNotification() in lib/notifications.ts: unique dedupeKey insert, P2002 collision = silent skipped-duplicate; EMAIL_TEST_MODE routes provider mode to 'capture' so no network call is ever attempted."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 8, "flags": [], "note": "queueEmail() upserts on dedupeKey (idempotent enqueue); isTestCaptureEnabled() captures instead of sending when EMAIL_TEST_MODE or no Resend key outside production; hasForcedFixtureFailure() gives a deliberate first-attempt-fails test hook."},
+      "arm-06": {"score": 9, "flags": [], "note": "claimOutboxRow()/dispatchOnce() in lib/email/claim-deliver.ts: atomic claim shared by the sweeper AND inline test-send paths so they can never double-deliver the same row; capture mode is implicit (no RESEND_API_KEY => sendEmail throws => captured as FAILED, or a dedicated test-send double at /api/dev/email-fixture). Independent of the broken margin.ts subsystem, so unaffected by R-173/174's defect."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/notifications.ts:22-35", "arm-05": "lib/email.ts:40-76", "arm-06": "lib/email/claim-deliver.ts:21-59, 93-113"}
+  },
+  {
+    "id": "R-179",
+    "name": "Mapbox geocoding with cache",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "geocodeAddress() in lib/addresses/geocode.ts: GeocodeCache TTL (30 days), real Mapbox geocoding call when MAPBOX_ACCESS_TOKEN is set, deterministic ZIP-centroid+street-offset fallback otherwise — always returns coordinates."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 6, "flags": [], "note": "geocodeAddress() in lib/delivery.ts: real Mapbox Search v6 forward call, cached via GeocodeCache. Without a token, mapboxCoordinates() THROWS (\"MAPBOX_ACCESS_TOKEN must be configured\") rather than degrading — only test mode gets a fixture; a token-less non-test deployment cannot geocode at all, unlike the clone cluster's always-available fallback."},
+      "arm-06": {"score": 5, "flags": [], "note": "lib/customers/geocode.ts derives lat/lng deterministically from a hash of the address key and caches it with a TTL — there is no live Mapbox Geocoding API call anywhere in the tree. The real Mapbox integration that exists (lib/routes/optimize.ts) calls the Optimization API for admin route stop-ordering, not geocoding, with a documented nearest-neighbor fallback. Matches the resolved 'Mapbox for admin' spirit for route building, but literally does not implement 'Mapbox geocoding' — geocoding itself is fixture-only."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-01": "lib/addresses/geocode.ts:44-99", "arm-05": "lib/delivery.ts:58-111", "arm-06": "lib/customers/geocode.ts:1-41, lib/routes/optimize.ts:54-85 (Mapbox used for optimization, not geocoding)"}
+  },
+  {
+    "id": "R-180",
+    "name": "Vercel Blob media storage",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/media.ts: magic-byte image-type detection (not trusting the declared MIME), Vercel Blob when BLOB_READ_WRITE_TOKEN is set, local .uploads/ fallback with a MediaAsset row recording which driver owns the bytes."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 7, "flags": [], "note": "app/api/admin/media/route.ts calls put() directly with validateCatalogImage() magic-byte check; returns 503 if BLOB_READ_WRITE_TOKEN is unset — no local-disk fallback, so media upload is unusable without Blob configured (vs. clone cluster's graceful local mode)."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/media/storage.ts putObject()/deleteObject()/copyObject(): dynamically imports @vercel/blob only when isBlobDriver() is true (avoids bundling the SDK when unused, a nicer lazy-singleton discipline than the clone cluster), local .uploads/ fallback, plus a copyObject() used by season-catalog duplication."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/media.ts:33-68", "arm-05": "app/api/admin/media/route.ts:1-38", "arm-06": "lib/media/storage.ts:1-80"}
+  },
+  {
+    "id": "R-181",
+    "name": "Secured outbox integration sweep",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "sweepNotificationOutbox() in lib/email/dispatch.ts: conditional-UPDATE claim (exactly one winner per row), stale-claim reclaim, 4-step exponential backoff on failure, batched settings load per sweep."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file); cron auth (lib/cron.ts) also untouched."},
+      "arm-05": {"score": 8, "flags": [], "note": "sweepEmailOutbox() in lib/email.ts: claim via conditional updateMany, stale-claim reclaim after a timeout (decrementing the spent attempt), retry backoff scaled by attempt count."},
+      "arm-06": {"score": 9, "flags": [], "note": "claimOutboxRow()/deliverClaimedRow() in lib/email/claim-deliver.ts: same one-claim law shared by the sweeper, campaign loop, AND test-send path; stale SENDING rows recovered WITHOUT spending an attempt (a crash isn't a provider failure)."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/email/dispatch.ts:41-121", "arm-05": "lib/email.ts:141-201", "arm-06": "lib/email/claim-deliver.ts:9-59"}
+  },
+  {
+    "id": "R-182",
+    "name": "Secured pickup-expiry operation",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "requireCronAuth() timing-safe bearer check (503 when CRON_SECRET unset — never runs unauthenticated), runCronJob() wraps every job with a CronRunLog start/finish/outcome row."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched files)."},
+      "arm-05": {"score": 8, "flags": [], "note": "authorizeCron() timing-safe bearer check in lib/route-auth.ts/cron-auth.ts; expirePickupPackages() in lib/delivery.ts handles the full PICKUP->UNCLAIMED transition with per-package audit rows."},
+      "arm-06": {"score": 9, "flags": [], "note": "isCronAuthorized() hashes both sides to a fixed-length digest before timingSafeEqual — an extra step beyond the clone cluster that defeats a length-based timing leak, not just a value-based one; cronRoute() wraps every handler uniformly."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/cron.ts:9-41, app/api/cron/pickup-expiry/route.ts:1-19", "arm-05": "lib/cron-auth.ts:1-14, lib/delivery.ts:496-523", "arm-06": "lib/cron-auth.ts:1-18, lib/cron-route.ts:1-24"}
+  },
+  {
+    "id": "R-183",
+    "name": "Typed optional-provider handling (Shippo/Mapbox)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/env.ts: single zod schema declares SHIPPO_API_TOKEN/FEDEX/UPS/USPS and MAPBOX_ACCESS_TOKEN all optional, with a superRefine cross-check that refuses a half-configured live-Shippo state (token set but carrier accounts missing)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "lib/env.ts only validates DATABASE_URL/Clerk keys. Shippo/Mapbox/Resend/Twilio config is read ad hoc via process.env.X (with an optionalEnvironmentValue() helper in shippo.ts filtering 'replace_me' placeholders) scattered across lib/shippo.ts, lib/delivery.ts, lib/email.ts/resend.ts — no centralized typed schema, no cross-field validation."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/env-spec.ts is a single declarative array (key/description/example/zod schema/secret flag) that lib/env.ts builds the runtime schema from AND scripts/gen-env-example.mts renders .env.example from — the most rigorous single-source-of-truth of any arm."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/env.ts:22-83, 91-124", "arm-05": "lib/env.ts:1-27, lib/shippo.ts:68-79 (scattered)", "arm-06": "lib/env-spec.ts:1-194"}
+  },
+  {
+    "id": "R-184",
+    "name": "UPS direct credentials declared, not implemented",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "env.ts comment: 'the UPS slot is also the declared home for UPS credentials (plan P8 declaration-only carry)' — SHIPPO_UPS_ACCOUNT_ID is deliberately overloaded to stand in for the direct-UPS-declared-but-unused gap, documented but conflated with the (implemented) Shippo carrier-account id rather than a distinct field."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 5, "flags": [], "note": "SHIPPO_UPS_CARRIER_ACCOUNT_ID exists only as a working Shippo carrier-account id (getShippoEnvironment() in lib/shippo.ts) — there is no separate UPS-direct-credential field or comment acknowledging the 'declared, not implemented' gap at all; the distinction from the original spec's intent is implicit at best."},
+      "arm-06": {"score": 10, "flags": [], "note": "lib/env-spec.ts explicitly declares UPS_CLIENT_ID and UPS_CLIENT_SECRET with description 'R-184 DECLARATION ONLY: direct UPS API credentials are declared so ops can provision them, but no code path uses them — all UPS shipping runs through the org's Shippo carrier account' and example value literally 'declared-not-implemented'. The shippo.ts header comment cross-references R-184 too. This is an exact, best-in-class match to the item's intent."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/env.ts:50-56", "arm-05": "lib/shippo.ts:59-79", "arm-06": "lib/env-spec.ts:178-193, lib/shipping/shippo.ts:1-9"}
+  },
+  {
+    "id": "R-185",
+    "name": "Vercel Cron jobs (5) with secret auth",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "vercel.json declares 6 crons (season-flip, payment-reminders, pickup-expiry, notification-sweeper, email-log-purge, stripe-reconciliation), each route also handles GET (Vercel invokes with GET) mapped to the same bearer-authed POST handler."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 8, "flags": [], "note": "vercel.json declares 6 crons (email-outbox, email-log-purge, pickup-expiry, payment-reminders, stripe-reconciliation, season-auto-flip), all gated by authorizeCron()."},
+      "arm-06": {"score": 8, "flags": [], "note": "vercel.json declares 8 crons (nightly-print, outbox-sweep, payment-reminders, pickup-expiry, season-flip, shipping-maintenance, email-log-purge, reconcile-stripe), all gated by isCronAuthorized() via the shared cronRoute() wrapper."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "vercel.json:1-11", "arm-05": "vercel.json:1-8", "arm-06": "vercel.json:1-10"}
+  },
+  {
+    "id": "R-186",
+    "name": "Nexternal legacy import pipeline + order-number repair",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/legacy-import/plan.ts + commit.ts: dry-run plan/normalize step (state-name mapping, phone/email customer dedupe+merge, order-number repair when blank/duplicate) followed by a 4-stage atomic commit (catalog->customers->addresses->orders) with a resumable LegacyImportStage marker per stage."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched files)."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "No Nexternal/legacy-order concept exists anywhere in the tree (verified via grep for 'legacy'/'nexternal'/'legacyRef' — zero matches). app/api/admin/imports/route.ts + lib/admin-operations.ts only stage/commit simple customer or product CSV rows (email/phone/name, or sku/name/price) with no order-number repair, no historical order ingestion, no season creation from imports. This is a fundamentally different, much smaller feature than the legacy migration pipeline the item asks for."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/imports/legacy/{orders,customers,products,seasons,resolve-customer}.ts: order-number repair is unconditional (claimOrderNumber() mints a fresh per-season sequential number for every imported order while preserving the old system's number verbatim on Order.legacyRef), unmapped products land as inactive $0 stubs feeding the repeat-order review flow, batched customer-match lookups avoid N+1 inside the commit transaction. At least as thorough as the clone cluster."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/legacy-import/plan.ts:126-352, lib/legacy-import/commit.ts:28-250", "arm-05": "app/api/admin/imports/route.ts:1-36, lib/admin-operations.ts:60-127", "arm-06": "lib/imports/legacy/orders.ts:12-328"}
+  },
+  {
+    "id": "R-187",
+    "name": "Health check (DB + env validation)",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "app/api/health/route.ts: SELECT 1 DB check, returns authMode; env validation is implicit — importing lib/env triggers loadEnv() at module-load time (throws at startup if invalid) rather than being explicitly re-verified inside the handler."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical to arm-01."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical to arm-01 (untouched file)."},
+      "arm-05": {"score": 5, "flags": [], "note": "app/api/health/route.ts: DB connectivity check only (SELECT 1); lib/env.ts is barely used elsewhere (only Clerk keys) so there's effectively no env-validation story surfaced through health at all."},
+      "arm-06": {"score": 7, "flags": [], "note": "app/api/health/route.ts explicitly imports '@/lib/env' as a documented side-effect ('validates env at boot; a bad value crashes startup with a clear message before this route ever serves') plus the DB check — same underlying mechanism as the clone cluster but the intent is deliberately called out at the health-route call site rather than left implicit."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/health/route.ts:1-19, lib/env.ts:165-178", "arm-05": "app/api/health/route.ts:1-15", "arm-06": "app/api/health/route.ts:1-17"}
+  }
+]

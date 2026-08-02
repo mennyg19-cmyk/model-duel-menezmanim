@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env*
+!.env.example
+.pgdata/
+.uploads/
+*.tsbuildinfo
+next-env.d.ts
+.scratch/
+.codegraph/

@@ -1,0 +1,776 @@
+[
+  {
+    "id": "R-066",
+    "name": "Add-on catalog management",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [],
+        "note": "Add-ons are created/edited in the same components/catalog-manager.tsx form as products (kind=ADD_ON): create + inline name/price edit + hide/archive, but no per-product restriction UI at all \u2014 grep for ProductAddOnAllow/restrictedTo finds nothing in the admin tree."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [],
+        "note": "Create + activate/deactivate + delete + per-product restriction display in the same catalog-manager component as products; no post-create edit of name/price."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "components/admin/addon-admin.tsx: a dedicated add-on CRUD page (SKU/name/price/onHand/isRestricted + delete), but 'isRestricted' is only a boolean flag \u2014 there is no UI to pick which specific products an add-on is restricted to (the real ProductAddOnAllow-style join is not editable here)."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "Dedicated /admin/catalog/add-ons page with a real per-product restriction editor (checkbox list of products in AddOnForm's restrictedToProductIds, saved via saveAddOnAction) plus full post-create edit (name/price/slug/active/tracks-inventory) via an inline details/summary \u2014 the most complete add-on management of the three, including the restriction UI the others lack."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "Add-ons are just Products with kind=ADD_ON in the same combined catalog form \u2014 same real inline-edit capability as products (name/price/photo/active), but no add-on-specific UX (e.g. restriction editing is folded awkwardly into the product form's 'restricted add-ons' multiselect)."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "Dedicated /admin/addons page with its own AddonManager: create + activate/deactivate + usage count ('N products'); like arm-01, no post-create name/price edit \u2014 same-tier gap."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "app/(admin)/admin/catalog/add-ons/page.tsx; add-on-form.tsx",
+      "arm-03": "components/admin/addon-admin.tsx",
+      "arm-06": "app/(admin)/admin/addons/addon-manager.tsx"
+    },
+    "_batch": "batch-03-admin-ops-catalog-inventory.json"
+  },
+  {
+    "id": "R-192",
+    "name": "Marketing imagery assets",
+    "scores": {
+      "arm-01": {
+        "score": 4,
+        "flags": [
+          "PARTIAL"
+        ],
+        "note": "Alongside the unmodified create-next-app scaffold SVGs, there is one bespoke themed asset (purim-ribbon.svg) genuinely wired into the storefront homepage as both the hero image and the product-image fallback \u2014 modest but real and in active use (location is a repo-root/public-directory extraction quirk shared by every arm's checkout, confirmed by comparing against arm-02's equally-flattened but asset-free baseline)."
+      },
+      "arm-02": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "public/ contains only the unmodified create-next-app default SVGs (globe.svg, next.svg, window.svg, vercel.svg, file.svg) \u2014 no Purim/Tomchei-Shabbos-specific marketing imagery, hero graphics, or brand assets were ever added."
+      },
+      "arm-03": {
+        "score": 2,
+        "flags": [
+          "STUB"
+        ],
+        "note": "One bespoke asset exists (brand-hero.svg) alongside the scaffold defaults, but it is never referenced anywhere in the codebase (grep confirms zero usages) \u2014 an orphaned, unused file rather than a working feature."
+      },
+      "arm-04": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No image assets of any kind exist anywhere in the codebase \u2014 not even the default Next.js scaffold SVGs; the only imagery-adjacent content is plain-text marketing copy (lib/marketing-content.ts)."
+      },
+      "arm-05": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No public/ directory exists at all in this workspace \u2014 zero static assets of any kind, marketing or otherwise."
+      },
+      "arm-06": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No public/ directory exists at all in this workspace either \u2014 zero static assets, not even the default Next.js scaffold images."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-01": "app/(storefront)/page.tsx:51-56,99-104; purim-ribbon.svg (in active use)",
+      "arm-03": "brand-hero.svg (present, 0 references)",
+      "arm-04": "find . -iname '*.svg' -o -iname '*.png' -o -iname '*.jpg' \u2192 no results",
+      "arm-02": "app/(storefront)/page.tsx:51-56,99-104; purim-ribbon.svg (in active use)"
+    },
+    "_batch": "batch-05-reporting-config-design.json"
+  },
+  {
+    "id": "R-107",
+    "name": "Clerk identity integration + middleware",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [],
+        "note": "Real @clerk/nextjs/server auth() gated by isClerkConfigured(), plus an HMAC-signed local test-auth header bypass (5-min window, timing-safe, localhost-only) for dev. proxy.ts (Next.js's renamed convention for middleware.ts) wraps clerkMiddleware() when Clerk is configured, else passes through -- a genuine, functioning edge gate. But there is no ClerkProvider anywhere and no /login or /sign-in page exists at all, so nobody can actually complete a Clerk sign-in in a real deployment."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [],
+        "note": "middleware.ts switches between clerkMiddleware() (AUTH_MODE=clerk) and a dev cookie-presence gate; StaffUser/Customer.clerkUserId columns exist for identity linking. But no ClerkProvider anywhere in app/layout.tsx and no Clerk UI mounted -- Clerk mode is a documented, unexercised swap-point (DECISION-P4-2: 'no keys in harness'), not a working integration. Dev-mode middleware itself is solid."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "middleware.ts runs real clerkMiddleware() + auth.protect(), fail-closed by default (AUTH_MODE=dev is the only opt-out, itself cookie-only and rejected in production); ClerkProvider is mounted in app/layout.tsx. The most complete Clerk wiring of the three re-graded arms, though /sign-in and /sign-up are carved out as public matcher routes with no page ever built to render Clerk's hosted UI at them (see R-108)."
+      },
+      "arm-04": {
+        "score": 5,
+        "flags": [],
+        "note": "getExternalIdentity() dynamically imports @clerk/nextjs/server's currentUser() when AUTH_PROVIDER=clerk, with a signed-cookie local-session fallback explicitly rejected outside a loopback, non-production deployment. No middleware.ts/proxy.ts exists anywhere in the tree, so there is no edge-level route gate at all -- every admin/driver surface relies entirely on its own layout- or action-level requirePermission() call instead."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "Real Clerk usage: ClerkProvider in app/layout.tsx, auth()/currentUser() in lib/route-auth.ts, isClerkConfigured() gate. But there is NO middleware.ts anywhere in the tree -- zero edge-level route protection for /admin or /driver; only a dev-header-based readDevSession() bypass gates anything early. Half of R-107 (real Clerk calls) is more genuine than the clone cluster's, but the 'middleware' half is simply absent."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "MISSING",
+          "THEATER"
+        ],
+        "note": "No @clerk/nextjs dependency anywhere in package.json; zero Clerk usage in the whole tree. middleware.ts is real and functional but implements a first-party session check only. Code comments in lib/customers/session.ts explicitly say 'Clerk swap: replace this module's decode half with Clerk session claims' -- an aspirational comment describing work that was never done, not a real integration."
+      }
+    },
+    "winner": "arm-03",
+    "runner_up": "arm-02",
+    "evidence": {
+      "arm-03": "middleware.ts:1-88 (clerkMiddleware + auth.protect fail-closed); app/layout.tsx (ClerkProvider mounted)",
+      "arm-02": "middleware.ts:1-19; lib/env.ts:25-30 (AUTH_MODE clerk/dev); app/layout.tsx has no ClerkProvider",
+      "arm-01": "proxy.ts:1-18; lib/auth.ts:23-57 (getAuthenticatedClerkUserId)"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-108",
+    "name": "Sign-in / sign-up pages",
+    "scores": {
+      "arm-01": {
+        "score": 2,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No /login, /signin, /sign-in, or /sign-up route exists anywhere in the app tree; the only user-facing auth-adjacent pages are /setup (first-manager bootstrap) and the accept-invite API. There is no ClerkProvider or rendered Clerk UI either, so nobody has any page to sign in through in a real deployment."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [],
+        "note": "Real, working pages: app/login/page.tsx (staff sign-in, open-redirect-safe ?next= handling) and app/(storefront)/signin/page.tsx (customer sign-in + register via components/account/auth-forms.tsx, anti-enumeration register endpoint at app/api/account/register). Fully functional in the app's real (dev-mode) auth path; no Clerk-hosted page exists but none is needed since Clerk isn't the live path."
+      },
+      "arm-03": {
+        "score": 3,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "ClerkProvider is mounted and /sign-in, /sign-up are carved out as public in middleware, but no SignIn/SignUp component or page.tsx was ever built at those paths (grep for SignIn/SignUp/UserButton across the whole tree returns nothing) -- the routing intent exists, the page does not."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [],
+        "note": "app/sign-in/page.tsx + actions.ts is a real, working local-provider sign-in form: looks up the ACTIVE staff row by email, returns an identical error for 'no such account' and 'revoked' (anti-enumeration), whitelists the post-login ?next= destination to /admin or /driver only, and stamps the login. It only operates when AUTH_PROVIDER=local (dev/test); the production AUTH_PROVIDER=clerk path still has no ClerkProvider or rendered sign-in UI anywhere, so this is a real, safe sign-in experience for one mode and none for the other."
+      },
+      "arm-05": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No /login, /signin, /sign-in, or /sign-up route exists anywhere in app/ (grep confirmed empty). The Clerk backend (auth()/currentUser()) is real but nothing in the app renders a page to actually sign in -- staff/customers have no way to reach an authenticated state outside the dev-auth header bypass."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "MISSING",
+          "BROKEN"
+        ],
+        "note": "app/dev-login only works when APP_ENV=test (fail-closed off in prod/preview); app/invite/[token] is a one-time-use staff confirmation link, not a reusable sign-in. No customer sign-in page or route exists (lib/customers/session.ts is defined but grep shows zero call sites for encodeCustomerSession/createCustomerSession anywhere in app/). Once a staff session's 12h TTL expires there is no way to sign back in in production -- setup/invite are the only session-issuing paths and both are single-use."
+      }
+    },
+    "winner": "arm-02",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-02": "app/login/page.tsx:1-60; app/(storefront)/signin/page.tsx uses components/account/auth-forms.tsx",
+      "arm-04": "app/sign-in/page.tsx; app/sign-in/actions.ts:20-55 (anti-enumeration, safe ?next= allowlist)",
+      "arm-03": "grep for SignIn/SignUp/UserButton across the whole tree = 0 results despite /sign-in being public in middleware.ts"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-118",
+    "name": "canDrive carve-out for driver-route permissions",
+    "scores": {
+      "arm-01": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No explicit 'canDrive' permission carve-out exists. ROLE_DEFAULTS.DRIVER is a literal empty array, and drivers reach their route exclusively through the token-link system, not a named permission on the RBAC layer as the item describes."
+      },
+      "arm-02": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No explicit 'canDrive' permission carve-out exists. ROLE_DEFAULTS.DRIVER is a literal empty array in lib/auth/permissions.ts, and the admin layout explicitly redirects DRIVER-role staff away from /admin entirely -- 'Drivers have no admin access... Routes are worked through the magic link.' The functional goal (a driver reaching their own route) is met, but through the token-link system, not a named permission carve-out on the RBAC layer as the item describes."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "'driver.access' is a real, first-class permission in the PERMISSIONS catalog, and ROLE_DEFAULTS.DRIVER = ['driver.access'] (not an empty array) -- a genuine, direct match for the item's literal description, distinct from the magic-link-only pattern the rest of the batch converges on."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "'routes.drive' is a first-class permission ('Open assigned delivery routes'), granted to DRIVER by default, with an extensive code comment explaining exactly why driving is deliberately split from route-planning (routes.manage). The cleanest, most explicitly-reasoned implementation of a real canDrive-style carve-out in the batch."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "Same pattern: DRIVER role carries zero permissions (lib/permissions.ts rolePermissions.DRIVER=[]) and driver route access is entirely magic-link based (app/driver/[token]). No canDrive-style permission exists."
+      },
+      "arm-06": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "Identical resolution: DRIVER:[] in lib/permissions.ts, no canDrive constant anywhere; drivers exclusively use /drive/[token] magic links. All three architectures converge on the same alternative design (token links instead of a permission carve-out), so this is a converged gap rather than a differentiator."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "lib/auth/permissions.ts:22-23,57 ('routes.drive' permission, DRIVER default, reasoning comment)",
+      "arm-03": "lib/permissions.ts:10,18 ('driver.access' permission, DRIVER default)",
+      "arm-02": "lib/auth/permissions.ts:28 (DRIVER: []); app/(driver)/driver/page.tsx:9-12 ('no login needed on the road')"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-133",
+    "name": "Automated repository security guardrails (CI)",
+    "scores": {
+      "arm-01": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory, no CI workflow file of any kind, anywhere in the true tree (confirmed by a repo-wide find for .github and *.yml/*.yaml). Nothing to grade."
+      },
+      "arm-02": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory, no CI workflow file of any kind, anywhere in the tree (confirmed by a repo-wide find for *.yml/*.yaml). Nothing to grade."
+      },
+      "arm-03": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory or CI workflow file anywhere in the true tree."
+      },
+      "arm-04": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory or CI workflow file anywhere in the true tree, despite an unusually strong internal testing culture (dozens of *.test.ts files, a dedicated migration-guard.ts, env-check.ts) that would be an obvious fit for CI wiring."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [],
+        "note": "The only arm with any CI at all: .github/workflows/ci.yml runs lint, typecheck, a migration-guard/harness step, and the test suite on push/PR. It is generic CI (not security-specific -- no secret scanning, SAST, or dependency audit step), but it is real, present, and would catch a meaningful class of regressions the other five arms have zero automated protection against."
+      },
+      "arm-06": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory or any CI workflow file anywhere in the tree, despite the package.json 'ci' script (lint+typecheck+migration-guard+tests) being clearly designed to be wired into one. The script exists; nothing actually invokes it automatically."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-05": ".github/workflows/ci.yml:1-22",
+      "arm-01": "repo-wide find for .github and *.yml/*.yaml = no results",
+      "arm-04": "repo-wide find for .github = no results, despite extensive test/*.test.ts + migration-guard.ts infrastructure",
+      "arm-02": "repo-wide find for .github and *.yml/*.yaml = no results"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-156",
+    "name": "Pickup locations",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: PickupLocation model (name/address:Json/instructions/isActive) AND a real Package.pickupLocationId nullable FK -- an individual pickup package's location assignment IS wired, contrary to the old grading's claim of a gap here."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [],
+        "note": "PickupLocation model (name/line1/city/state/zip/isActive) exists with full admin CRUD (app/api/admin/pickup-locations), but NO FK from Package to PickupLocation anywhere in the schema -- a pickup package's specific location assignment isn't modeled, only the location catalog is."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: PickupLocation model exists (code/name/line1/city/state/postalCode/isActive) with full admin CRUD, but Package has NO pickupLocationId field anywhere -- same disconnected-catalog gap as the byte-identical cluster."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: PickupLocation model wired via BOTH Package.pickupLocationId AND OrderLine.pickupLocationId (nullable FKs at two levels of the tree) -- the most completely wired pickup-location design of any arm."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PickupLocation model PLUS Package.pickupLocationId (nullable FK, onDelete: SetNull) -- an individual package's pickup location assignment is actually modeled and wired, closing the gap the other five arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PickupLocation model with admin CRUD, same gap as clone cluster: no FK from Package to PickupLocation."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:49-61; orders.prisma:139; fulfillment.prisma:80",
+      "arm-01": "schema.prisma:663-691 (Package.pickupLocationId)",
+      "arm-05": "prisma/schema.prisma:468-501,692-704",
+      "arm-02": "schema.prisma:663-691 (Package.pickupLocationId)"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-157",
+    "name": "Package types + shipment boxes",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: PackageType (innerWidthMm/innerHeightMm/innerDepthMm/maxWeightGrams) <- ShipmentBox.packageTypeId <- ShipmentBox.packageId (real FK to an actual Package row) -- a genuinely wired chain, contrary to the old grading's claim of disconnection."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [],
+        "note": "PackageType and ShipmentBox both exist as standalone dimension catalogs (name/widthCm/lengthCm/heightCm/weightGrams), but neither is actually referenced by the Shipment model (which only carries a free-form parcels Json bin-packing snapshot) -- the catalogs are disconnected from real shipment records."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: PackageType <- ShipmentBox.packageTypeId exists, but ShipmentBox has NO packageId field at all -- boxes are never tied to an actual package instance. Package.shipmentPlan (Json) is the real bin-packing snapshot used in practice, leaving the PackageType/ShipmentBox catalog fully disconnected."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: PackageType <- ShipmentBox.packageTypeId <- ShipmentBox.packageId (required FK), PLUS Package.packageTypeId itself as a direct nullable FK -- double-wired (a package references its dominant type, and each individual box references its own type). The most complete chain of any arm."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PackageType (dims + maxWeightOunces) <- ShipmentBox.packageTypeId (Restrict) <- ShipmentBox.packageId (SetNull, an assigned box on a specific package) -- an actual wired chain from box-type catalog to a real package's box assignment, closing the gap the other arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PackageType and ShipmentBox both exist as standalone catalogs; Shipment carries only a parcels Json snapshot, same disconnection as clone cluster."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:128-160,177-225",
+      "arm-01": "schema.prisma:936-964",
+      "arm-05": "prisma/schema.prisma:706-740",
+      "arm-02": "schema.prisma:936-964"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-162",
+    "name": "Geocode cache with success/failure TTLs",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [],
+        "note": "TRUE codebase: GeocodeCache schema DOES support a cached failure (nullable lat/lng + failureCode field), but domain/delivery.ts's geocodePackage() never actually writes a failure row -- it THROWS on a Mapbox miss instead of caching it. So the schema's failure-representation capability is unused in practice; only a single 30-day success TTL is ever exercised."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [],
+        "note": "GeocodeCache{addressHash unique, latitude, longitude, provider, fetchedAt, expiresAt}. lib/addresses/geocode.ts implements a real 30-day success cache with a live Mapbox provider + deterministic local fallback, but a FAILED lookup (coordinates null) is simply returned uncached -- there is no negative/failure-specific TTL, and the schema itself has no way to represent a cached failure (lat/lng are non-nullable). 'Success/failure TTLs' as stated is only half-built."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: GeocodeCache has an explicit success:Boolean field and DOES cache failures (not just successes), but uses the SAME 30-day TTL_MS for both outcomes -- no differentiated failure TTL. Geocoder itself is a deterministic offline stub with no live provider call."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: GeocodeCache.outcome: GeocodeOutcome(FOUND/NOT_FOUND/FAILED) with an explicit comment: 'A miss is kept for a much shorter time than a hit' -- confirmed in lib/geocode-cache.ts as GEOCODE_SUCCESS_TTL_MS (90 days) vs GEOCODE_FAILURE_TTL_MS (1 hour), read/write logic kept in separate functions. This is the only true arm that fully implements BOTH halves of the requirement, on top of a real Mapbox integration with deterministic fallback (lib/routing/geocode.ts)."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "GeocodeCache{normalizedAddress unique, latitude/longitude Decimal, provider, expiresAt}. lib/delivery.ts has the same shape: real Mapbox call + fixture fallback, 30-day success TTL, no distinct failure-TTL representation."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "GeocodeCache{addressKey unique, lat/lng, provider, fetchedAt, expiresAt}, 30-day TTL. lib/customers/geocode.ts's deriveGeoPoint is a pure hash-based deterministic function with NO live external geocoding API integration at all (explicitly documented as 'no live geocoding API is reachable from this host') -- it can never actually fail, so the failure-TTL half of this requirement is not just unimplemented but structurally moot; also the least realistic of the three geocoders."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "schema/customers.prisma:74-87; lib/geocode-cache.ts; lib/routing/geocode.ts",
+      "arm-03": "lib/address/geocode.ts:1-80",
+      "arm-01": "schema.prisma:980-993; domain/delivery.ts:52-121",
+      "arm-02": "schema.prisma:980-993; domain/delivery.ts:52-121"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-173",
+    "name": "Shippo SDK wrapper (rate/buy/void/track/validate)",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/shippo.ts: all 5 verbs (getRates/buyLabel/voidLabel/trackShipment/validateAddress) behind fetch, mock-mode fixtures, 15s AbortSignal timeout on every call, dedicated ShippoError class."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/shippo.ts: all 5 verbs (getRates/buyLabel/voidLabel/trackShipment/validateAddress) behind fetch, mock-mode fixtures, 15s AbortSignal timeout on every call, ShippoError class."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shippo/client.ts: 3 explicit modes (mock/live/test), deterministic mockGroundRates() fixtures, buyLabel() supports an idempotency key, explicitly declares UPS direct-API fields as declaration-only (foreshadows R-184)."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/shippo-api.ts: all 5 verbs via fetch with zod-validated carrier response schemas and a dedicated CarrierRequestError for strict failure handling."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/shippo.ts: ShippoClient interface (fixture/live) covers all 5 verbs with zod-free but well-typed response parsing; fixture mode is deterministic per postal code."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "lib/shipping/shippo.ts itself is excellent standalone (zod-validated response schemas, clientMessage/server-log detail split, all 5 verbs) \u2014 but see R-174: its sibling lib/shipping/margin.ts is corrupted (byte-identical to the OTHER arms' single-arg CarrierRate-based margin.ts, git-diff confirms 0 lines differ from arm-01's), so lib/shipping/quotes.ts (which imports 5 names from margin.ts that do not exist there: GROUND_SERVICE_TOKENS, MarginResolution, normalizeRates, RateOption, and a resolveMargin with a mismatched signature) fails to typecheck. quotes.ts is imported by lib/checkout/shipping-quotes.ts and lib/shipping/labels.ts, which is imported by 8 more files including every label route and the checkout flow \u2014 this is a full `next build`-breaking defect, not a standalone-file quality issue. The wrapper itself would score 9 in isolation; scored down because nothing in the delivered tree can actually invoke it."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "lib/shipping/shippo-api.ts:1-174",
+      "arm-03": "lib/shippo/client.ts:1-245",
+      "arm-06": "lib/shipping/shippo.ts (fine) + lib/shipping/margin.ts (broken, identical to arm-01's) + lib/shipping/quotes.ts:1-18 (imports non-existent exports)"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-174",
+    "name": "Shippo rate lookup + cheapest-rate selection",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/quotes.ts + lib/shipping/margin.ts: bin-packs items into parcels, calls getRates, resolveMargin() picks the cheapest-per-carrier best and charges the highest \u2014 pure, unit-testable, persisted as an expiring ShippingQuote."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/quotes.ts + lib/shipping/margin.ts: bin-packs items into parcels, calls getRates, resolveMargin() picks the cheapest-per-carrier best and charges the highest \u2014 pure, unit-testable, persisted as an expiring ShippingQuote."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/margin.ts selectMargin() + lib/shipping/checkout-rates.ts resolveDeliveryFeesLive(): ground-eligible cheapest-buy/highest-charge selection wired LIVE into checkout, quoting once per unique ship destination and sharing the same bin-pack used at label-purchase time."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/margin.ts combineParcelRates(): a service is only eligible for a multi-box shipment if it can cover ALL of that shipment's parcels \u2014 a genuine correctness nuance the simpler per-parcel selectors elsewhere don't check for mixed carrier availability across boxes."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "selectMarginRate() in lib/shippo.ts: filters to ground-equivalent, non-expired, eligible-carrier rates, then picks highest-charge/cheapest-buy \u2014 same margin law as the clone cluster, slightly less rigorously separated (rate-expiry filter lives inside the selector rather than at the quote boundary) but fully functional and used end-to-end in lib/shipping.ts."
+      },
+      "arm-06": {
+        "score": 1,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "This IS the corrupted subsystem: lib/shipping/margin.ts (checked via `git show` \u2014 introduced already-broken, byte-identical to arm-01's simpler single-arg CarrierRate version) does not export GROUND_SERVICE_TOKENS, MarginResolution, normalizeRates, or RateOption, and its resolveMargin(rates: CarrierRate[]) signature doesn't match the 3-arg call resolveMargin(options, config.includeUsps, groundTokens) in lib/shipping/quotes.ts. CarrierRate itself doesn't exist anywhere in arm-06's tree (its shippo.ts exports ShippoRate). scripts/test-p8.mts's own test calls (resolveMargin(rates, false)) also don't match the file's actual export \u2014 confirming the checked-in test suite was written against a different, correct margin.ts that is missing/overwritten. This is a real, verified TypeScript compile failure, not a style nit."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "lib/shipping/margin.ts:1-60 (combineParcelRates)",
+      "arm-01": "lib/shipping/quotes.ts:1-71, lib/shipping/margin.ts:1-33",
+      "arm-06": "lib/shipping/margin.ts:1-32 vs lib/shipping/quotes.ts:1-18 (export mismatch); git show 5fa93da -- lib/shipping/margin.ts confirms it was already broken at commit time",
+      "arm-02": "lib/shipping/quotes.ts:1-71, lib/shipping/margin.ts:1-33"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-175",
+    "name": "Shippo label failure compensation",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "domain/shipping.ts buyPackageLabel(): advisory transaction lock prevents double-buy, void-and-record compensation on post-purchase DB write failure, recordFailedShipment() leaves a visible FAILED Shipment row without touching customer money."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [],
+        "note": "buyLabelForPackage(): advisory xact lock prevents double-buy, void-and-record on post-purchase DB write failure, recordFailedShipment() leaves a visible FAILED Shipment row without touching customer money."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/labels.ts createLabelForPackage(): validates the address before ever buying, uses an idempotency key on the Shippo buy call, recordFailedLabel() on carrier/DB failure; voidLabelForPackage() and refreshTracking() round out the module."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/label-service.ts buyLabelForPackage(): uses transactional claims per parcel, and if any parcel in a multi-box shipment fails AFTER some labels are already bought, ALL already-bought labels for that box are voided at the carrier before the failure is recorded \u2014 the most complete compensation logic of the three, handling a multi-parcel partial-failure case the others don't explicitly cover."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "createPackageLabel() in lib/shipping.ts: try/catch void-on-persist-failure, and a second-level catch that records a VOID_FAILED ShipmentBox + audit row when even the compensating void throws \u2014 thorough double-failure handling."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "lib/shipping/labels.ts buyLabel()/resolveStuckShipment() logic is arguably the best-designed of all six arms (distinguishes carrier-sold-but-not-persisted from never-sold, a stuck-purchase sweep, crash-window compensation) \u2014 but the file imports quoteShipping from lib/shipping/quotes.ts, which fails to typecheck (see R-174). As delivered, this module cannot compile, so the feature is unreachable in a real build despite excellent logic on paper."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "lib/shipping/label-service.ts:1-120 (buyLabelForPackage)",
+      "arm-01": "domain/shipping.ts:91-227",
+      "arm-06": "lib/shipping/labels.ts:169-316 (depends on broken lib/shipping/quotes.ts)",
+      "arm-02": "domain/shipping.ts:91-227"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-176",
+    "name": "Shippo tracking refresh",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "refreshShipmentTracking() in domain/shipping.ts: fetches carrier status, maps failure to a clean ActionError instead of a 500."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [],
+        "note": "refreshShipmentTracking(): fetches carrier status, maps failure to a clean ActionError instead of a 500."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "refreshTracking() in lib/shipping/labels.ts: refreshes carrier tracking status and persists it, comparable in scope to the clone cluster."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "refreshTracking() in lib/shipping/label-service.ts: an explicit allowTerminal flag so tracking keeps refreshing once the carrier has the package, unlike buy/void which must stop \u2014 a nuance the simpler designs elsewhere don't distinguish."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "refreshPackageTracking() in lib/shipping.ts: refreshes carrier tracking, persists trackingStatus/lastTrackedAt, logs a PackageAudit row."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "refreshTracking() in lib/shipping/labels.ts is well-designed (an explicit allowTerminal flag so tracking keeps working once the carrier has the package, unlike buy/void) but the module transitively fails to typecheck via lib/shipping/quotes.ts (see R-174), so it cannot ship in a real build."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "lib/shipping/label-service.ts:560-600 (refreshTracking, allowTerminal)",
+      "arm-01": "domain/shipping.ts:296-320",
+      "arm-05": "lib/shipping.ts:321-334",
+      "arm-02": "domain/shipping.ts:296-320"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-177",
+    "name": "Shippo address validation",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "validateAddress() in lib/shipping/shippo.ts, called from buyPackageLabel() before any label purchase \u2014 carrier refusal surfaces as a clean error, no money moves."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [],
+        "note": "validateAddress() in shippo.ts, called from buyLabelForPackage before any label purchase \u2014 carrier refusal surfaces as a clean error, no money moves."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "validateAddress() in lib/shippo/client.ts (fixture/live), invoked both from a dedicated validation endpoint and from inside createLabelForPackage() before buying."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "validateAddress() in lib/shipping/shippo-api.ts with a zod-validated carrier response, wired into label-service.ts's buyLabelForPackage() before every purchase."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "validateAddress() in lib/shippo.ts (fixture/live), invoked from validatePackageAddress() and inside createPackageLabel() before buying."
+      },
+      "arm-06": {
+        "score": 3,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "shippo.ts's validateAddress() itself is fine standalone (doesn't import the broken margin.ts) and is used correctly in labels.ts's buyLabel()/validatePackageAddress() \u2014 but labels.ts as a whole fails to typecheck because it also imports the broken lib/shipping/quotes.ts (see R-174/R-175), so the staff-facing 'validate this address' feature is unreachable in the delivered build despite the underlying function being correct."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "lib/shipping/shippo-api.ts:1-40 (validateAddress), lib/shipping/label-service.ts:1-40",
+      "arm-03": "lib/shippo/client.ts:1-40 (validateAddress)",
+      "arm-01": "lib/shipping/shippo.ts:157-173",
+      "arm-02": "lib/shipping/shippo.ts:157-173"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-179",
+    "name": "Mapbox geocoding with cache",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "geocodeAddress() in lib/addresses/geocode.ts: GeocodeCache TTL (30 days), real Mapbox geocoding call when MAPBOX_ACCESS_TOKEN is set, deterministic ZIP-centroid+street-offset fallback otherwise \u2014 always returns coordinates."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [],
+        "note": "geocodeAddress() in lib/addresses/geocode.ts: GeocodeCache TTL (30 days), real Mapbox geocoding call when MAPBOX_ACCESS_TOKEN is set, deterministic ZIP-centroid+street-offset fallback otherwise \u2014 always returns coordinates."
+      },
+      "arm-03": {
+        "score": 3,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "lib/address/geocode.ts is explicitly documented as a 'Deterministic offline geocoder (no external provider in P4)' \u2014 fakeGeocode() with a ZIP-based centroid fallback, cached in geocodeCache, is the ONLY implementation. There is no live Mapbox Geocoding API call anywhere in the tree."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/routing/geocode.ts: cache-first (readGeocodeCache()), askMapbox() distinguishes a genuine API error (failed:true, worth retrying) from a legitimate not-found (point:null, failed:false), offlinePoint() deterministic local fallback \u2014 a correctness nuance the always-succeed fallback designs elsewhere don't make."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "geocodeAddress() in lib/delivery.ts: real Mapbox Search v6 forward call, cached via GeocodeCache. Without a token, mapboxCoordinates() THROWS (\"MAPBOX_ACCESS_TOKEN must be configured\") rather than degrading \u2014 only test mode gets a fixture; a token-less non-test deployment cannot geocode at all, unlike the clone cluster's always-available fallback."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "lib/customers/geocode.ts derives lat/lng deterministically from a hash of the address key and caches it with a TTL \u2014 there is no live Mapbox Geocoding API call anywhere in the tree. The real Mapbox integration that exists (lib/routes/optimize.ts) calls the Optimization API for admin route stop-ordering, not geocoding, with a documented nearest-neighbor fallback. Matches the resolved 'Mapbox for admin' spirit for route building, but literally does not implement 'Mapbox geocoding' \u2014 geocoding itself is fixture-only."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "lib/routing/geocode.ts:1-90 (askMapbox, offlinePoint)",
+      "arm-01": "lib/addresses/geocode.ts:44-99",
+      "arm-03": "lib/address/geocode.ts:1-70 (fakeGeocode only, no Mapbox call)",
+      "arm-02": "lib/addresses/geocode.ts:44-99"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "UR-004",
+    "name": "Map reroute",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "app/(admin)/admin/delivery/routes/[routeId]/page.tsx renders a REAL Mapbox Static Images API map -- an actual street-tile image (api.mapbox.com/styles/.../static/...) with one pin per stop encoded in the URL, not a placeholder SVG. components/delivery-operations.tsx + domain/delivery.ts findNearbyShippingPackages()/confirmRouteReroute() implement the full manager flow: suggest packages within 0.5mi or same street of an existing stop, confirm reroutes the package (voiding any label via switchFulfillmentMethod), inserts a new RouteStop, bumps printRevision. This is the most literal implementation of 'map shows delivery stops + nearby unshipped shipping, manager confirms' of any arm graded."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [],
+        "note": "components/admin/route-map.tsx renders an inline server-side SVG plotting stop/delivered/suggestion points with a dashed polyline; route detail page overlays rerouteSuggestions() (packages within 0.5mi or same street of a stop, unshipped, no route yet) with a manager RerouteConfirmButton. confirmReroute() voids any purchased Shippo label via switchPackageMethod, inserts the new RouteStop nearest-neighbor-ordered, and reprints are triggered downstream. Real, working, geographically-plotted map -- but it is an SVG placeholder ('swap for Mapbox GL when a token exists' per its own comment), not an actual Mapbox map."
+      },
+      "arm-03": {
+        "score": 5,
+        "flags": [],
+        "note": "No visual map anywhere on the route pages -- components/admin/route-detail.tsx shows only a text list. lib/routes/geo.ts (haversineMiles, googleMapsDeepLink, geocodePackageAddress, sameStreetCluster) backs a functionally-complete text-based reroute-suggestion-and-confirm flow, just with no map rendering at all, static or otherwise."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [],
+        "note": "No visual map anywhere -- lib/routing/nearby-suggestions.ts + lib/routing/reroute.ts implement server-validated nearby-distance suggestions with caching and a transactional rerouteOntoRoute(), and app/(admin)/admin/routes/[routeId]/page.tsx wires it into the UI as a list, but there is no map image or widget."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "MISSING",
+          "STUB"
+        ],
+        "note": "Backend exists in lib/delivery.ts (nearbyShippingPackages() computes candidates by geocoded distance, confirmReroute() calls switchPackageMethod + creates a stop) but there is ZERO UI surfacing it -- app/admin/delivery/page.tsx only offers manual comma-separated package-ID entry for route creation and has no map, no suggestion list, no reroute button anywhere. The resolved requirement ('map shows... manager confirms') is not reachable by a manager in this build."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "lib/routes/optimize.ts genuinely calls the real Mapbox Optimization API (optimized-trips/v1) for stop ordering with a nearest-neighbor fallback -- more real Mapbox integration than the clone cluster. lib/routes/reroute.ts + route-actions.tsx implement the full manager-confirmed reroute flow (0.5mi/same-street suggestions, label void, charge preserved) as a text list with a 'Scan for candidates' button and per-row Reroute action. However there is NO visual map anywhere on the route detail page -- no SVG, no static image, no GL widget -- so 'map shows delivery stops + nearby unshipped shipping' is satisfied functionally (the data) but not visually."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/delivery/routes/[routeId]/page.tsx (real Mapbox Static Images map), domain/delivery.ts findNearbyShippingPackages()/confirmRouteReroute()",
+      "arm-05": "lib/delivery.ts nearbyShippingPackages()/confirmReroute() -- unused by any page",
+      "arm-06": "lib/routes/optimize.ts orderStopsMapbox(), app/(admin)/admin/routes/[routeId]/route-actions.tsx (list UI, no map)",
+      "arm-02": "app/(admin)/admin/delivery/routes/[routeId]/page.tsx (real Mapbox Static Images map), domain/delivery.ts findNearbyShippingPackages()/confirmRouteReroute()"
+    },
+    "_batch": "batch-09-ur-requirements.json"
+  }
+]

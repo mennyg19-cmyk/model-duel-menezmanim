@@ -1,0 +1,317 @@
+[
+  {
+    "id": "R-091",
+    "name": "Multi-season performance reports + drill-downs",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/reports.ts: seasonPerformance() aggregate query (orders/items/fees/donations/collected/paid-unpaid/packages per season) + seasonDrilldown() by fulfillment method and by product, wired into app/(admin)/admin/reports/page.tsx with a 'Drill down' link per season row. Real Prisma groupBy + $queryRaw, no row-walking."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for this file set (verified ground truth); same lib/reports.ts and reports/page.tsx."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02 for this file set."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Diverges from 01/02/03 only in checkout/fees/public-guard/driver-access/margin/package.json/db-start — none touch reports; identical reports.ts/reports page."},
+      "arm-05": {"score": 4, "flags": ["MISSING"], "note": "app/admin/reports/page.tsx + lib/reporting.ts performanceReport() gives one flat per-season row (orders, gross, fulfillment, paid) with NO drill-down by method or product anywhere in the API or UI — a real capability gap vs the spec's 'drill-downs'."},
+      "arm-06": {"score": 9, "flags": [], "note": "app/(admin)/admin/reports/page.tsx: tabbed Performance/Margin UI, season table with channel-mix column, and explicit 'By method' / 'By product' drill-down links (lib/reports/seasons.ts getMethodDrilldown/getProductDrilldown) rendered inline with data-testid hooks — most complete of all six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/reports.ts:22-132; app/(admin)/admin/reports/page.tsx:1-127", "arm-05": "app/admin/reports/page.tsx:95-104; lib/reporting.ts:130-148 (no drilldown fn)", "arm-06": "app/(admin)/admin/reports/page.tsx:22-171; lib/reports/seasons.ts"}
+  },
+  {
+    "id": "R-092",
+    "name": "CSV export center + audit history",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Dedicated app/(admin)/admin/exports/page.tsx: 5-dataset EXPORT_DATASETS list (deliveries/year-end/year-metrics/item-sales/lapsed-customers), season picker, streamed CSV via app/api/admin/exports/[dataset]/route.ts (async generators, 500-row pages), and an audit-history table sourced from db.auditLog (action=export.run)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical exports page/lib to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical exports page/lib to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's file diffs don't touch lib/exports.ts or the exports page — identical to clone cluster."},
+      "arm-05": {"score": 5, "flags": [], "note": "No dedicated export center — 3 CSV export links (year_metrics/item_sales/shipping_margin) folded inline into the Reports page (lib/reporting.ts exportCsv). Audit history for exports IS shown (auditEvent rows), but far fewer datasets and no season-scoped export selector for most datasets."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated app/(admin)/admin/export/page.tsx: permission-filtered EXPORT_DATASET_LIST cards, season selector, streamed downloads, and a rich export-history table (actor, rows, filename) sourced from AuditLog action=export_csv."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/exports/page.tsx:1-111; lib/exports.ts:1-60", "arm-05": "app/admin/reports/page.tsx:100-114; lib/reporting.ts:178-198", "arm-06": "app/(admin)/admin/export/page.tsx:1-117"}
+  },
+  {
+    "id": "R-093",
+    "name": "Stripe payment reconciliation",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/payments/reconcile.ts runPaymentReconciliation(): cross-checks StripeCheckoutSession vs posted Payment ledger for orphaned_payment/amount_mismatch/refund_failed/ledger_only_payment, upserts PaymentReconFlag on unique reference (idempotent reruns), surfaced via ReconPanel in the Exports page and a nightly cron (app/api/cron/stripe-reconciliation)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical lib/payments/reconcile.ts and recon-panel.tsx."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch lib/payments/reconcile.ts — identical to clone cluster."},
+      "arm-05": {"score": 4, "flags": [], "note": "runStripeReconciliation() in lib/reporting.ts only checks one direction — orphaned StripePaymentIntent rows with paymentId===null — and writes an AuditEvent; no amount-mismatch, ledger-only-payment, or refund-failure detection. Triggered by a button on the Reports page, no dedicated UI/history table beyond the generic audit list."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated app/(admin)/admin/reconciliation/page.tsx backed by a ReconciliationRun/finding model with 5 finding kinds (ORPHANED_INTENT/MISSING_PAYMENT/AMOUNT_MISMATCH/STALE_MIRROR/STATUS_DRIFT), run history table, checked/matched/flagged counters, and a driver-mode badge. Most thorough implementation."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/payments/reconcile.ts:1-192", "arm-05": "lib/reporting.ts:200-210", "arm-06": "app/(admin)/admin/reconciliation/page.tsx:1-140"}
+  },
+  {
+    "id": "R-094",
+    "name": "Settings hub + Orders tab (store status, package types, pickup, follow-up)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "components/admin/settings/orders-tab.tsx: SeasonStatusCard (open/close toggle + auto-open/close schedule + closed-banner message), package-type add/remove list, pickup-location add/activate-deactivate list, and a follow-up-days numeric setting — all wired to real API routes."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical orders-tab.tsx."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch settings/orders-tab.tsx."},
+      "arm-05": {"score": 3, "flags": ["MISSING"], "note": "app/admin/settings/page.tsx Orders section has only a store-status OPEN/CLOSED select; the UI text literally admits 'Package types, pickup locations, and follow-up rules will be connected in later operations phases' — those admin controls do not exist anywhere in the app despite the underlying Prisma models existing."},
+      "arm-06": {"score": 8, "flags": [], "note": "settings-tabs.tsx Orders tab: store-status display, package-type add/deactivate list (with L×W×H/weight), pickup-location add/deactivate list. Follow-up is implemented as its own full admin page/work-queue (app/(admin)/admin/follow-ups) rather than a Settings toggle — functionally present but organizationally different from the Settings-tab spec."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/admin/settings/orders-tab.tsx:1-121", "arm-05": "app/admin/settings/page.tsx:95", "arm-06": "app/(admin)/admin/settings/settings-tabs.tsx:193-271; lib/admin/follow-ups.ts"}
+  },
+  {
+    "id": "R-095",
+    "name": "Settings Shipping tab (rates, rules, delivery ZIPs)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "components/admin/settings/shipping-tab.tsx: editable delivery-ZIP allowlist, an editable named-rate list (add row / remove / save), editable bulk & per-package fee rules, and editable Purim delivery-day choices — all persisted via the settings API and read live at checkout."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical shipping-tab.tsx."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch settings/shipping-tab.tsx."},
+      "arm-05": {"score": 4, "flags": [], "note": "Settings page Shipping section has only editable delivery-ZIP textarea and delivery-dates textarea; no rate table and no fee-rule editor anywhere — text even says 'Live carrier rates arrive in P8.'"},
+      "arm-06": {"score": 7, "flags": [], "note": "settings-tabs.tsx Shipping tab: editable ZIP allowlist, editable bulk/per-package delivery fees, editable delivery days — all live-persisted. The 'Shipping rules' section is present but read-only/display-only (no add/edit form), slightly thinner than the clone cluster's fully editable rate+rule tables."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/admin/settings/shipping-tab.tsx:1-128", "arm-05": "app/admin/settings/page.tsx:96", "arm-06": "app/(admin)/admin/settings/settings-tabs.tsx:273-357"}
+  },
+  {
+    "id": "R-096",
+    "name": "Settings Email + Developer tabs",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "components/admin/settings/email-tab.tsx: from/reply-to/branding-footer fields, a real test-send button reporting outcome (sent/captured), and a log-retention-days setting. developer-tab.tsx is a 3-line static info block (port numbers, storage note) — no real developer tooling (API keys, webhooks)."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical email-tab.tsx / developer-tab.tsx."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch these settings tab files."},
+      "arm-05": {"score": 6, "flags": [], "note": "Email section is comparatively rich (campaign drafts, send/test-send, transactional-template + branding viewer, outbox count) but lives inline on the general Settings page rather than a distinct tab; Developer section is a single sentence with zero real controls."},
+      "arm-06": {"score": 8, "flags": [], "note": "settings-tabs.tsx Email tab shows live delivery-mode badges for email (live Resend / fixture / capture) and SMS (live Twilio / capture) plus a real test-send that reports provider id, and links out to the fuller /admin/email campaign platform. Developer tab reports the actual storage driver and notes API-key scope. More informative than the clone cluster's static text, still no real API-key management."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "components/admin/settings/email-tab.tsx:1-96; components/admin/settings/developer-tab.tsx:1-16", "arm-05": "app/admin/settings/page.tsx:97-123", "arm-06": "app/(admin)/admin/settings/settings-tabs.tsx:359-436"}
+  },
+  {
+    "id": "R-097",
+    "name": "New-season setup wizard",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "components/admin/settings/season-management.tsx NewSeasonCard: name, 'copy catalog from' season dropdown, optional auto-open/close dates, single-step form. app/api/admin/seasons/route.ts genuinely copies products (with options), add-ons, and restrictions and links repeat-order mappings. Single-step form rather than a multi-step wizard UI, but functionally complete."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical season-management.tsx and seasons API route."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch season-management.tsx or the seasons route."},
+      "arm-05": {"score": 5, "flags": [], "note": "app/admin/seasons/page.tsx 'New-season setup' section: name/year/scheduled-opening form only — no catalog-copy option in the UI or the POST handler (grep confirms no copyFrom/copyCatalog field in the seasons API), so next season starts with an empty catalog every time. Still has useful replacement-mapping and staff-repeat sections alongside it."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/seasons/season-manager.tsx explicit wizard fields (name, copy-from-season, scheduled open/close) calling a server-side createSeasonWizard() (app/api/admin/seasons/route.ts) that performs the catalog copy — same completeness as the clone cluster plus explicitly named 'wizard' semantics."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "components/admin/settings/season-management.tsx:129-205; app/api/admin/seasons/route.ts:11-46", "arm-05": "app/admin/seasons/page.tsx:90-98", "arm-06": "app/(admin)/admin/seasons/season-manager.tsx:33-84; app/api/admin/seasons/route.ts:39-58"}
+  },
+  {
+    "id": "R-098",
+    "name": "Staff account + permission management",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "components/staff-manager.tsx: add-staff form (name/email/role/password), role change, revoke/reactivate, and a full per-permission GRANT/DENY/inherit override editor (ALL_PERMISSIONS grid) — self-protection (can't edit self) enforced client- and server-side."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical staff-manager.tsx."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch staff-manager.tsx."},
+      "arm-05": {"score": 5, "flags": ["STUB"], "note": "app/admin/staff/page.tsx supports invite (with a manual Clerk-user-ID field), revoke, and impersonate, and the PATCH API (lib/staff-store.ts) accepts a partial permission-overrides record server-side — but the staff list UI never renders an override editor, so per-permission grant/deny is unreachable from the admin screen despite being modeled."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/staff/[id]/staff-editor.tsx: role select, full PERMISSIONS grid with INHERIT/GRANT/DENY per permission, optimistic-concurrency version field, revoke — on par with the clone cluster, split across a list page + dedicated edit page instead of one page."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/staff-manager.tsx:187-240", "arm-05": "app/admin/staff/page.tsx:1-94; app/api/staff/[staffId]/route.ts:40-52 (override plumbing with no UI caller)", "arm-06": "app/(admin)/admin/staff/[id]/staff-editor.tsx:1-60"}
+  },
+  {
+    "id": "R-099",
+    "name": "Staff impersonation",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/api/impersonate/route.ts: permission-gated start/stop, blocks self-impersonation and double-impersonation, audits both start and stop with target email; layout.tsx shows a persistent 'Impersonating X as Y' banner with a stop button while active."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical impersonate route and banner."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch impersonation code."},
+      "arm-05": {"score": 5, "flags": [], "note": "app/api/staff/[staffId]/route.ts action=impersonate calls startImpersonation() with active-status and self-impersonation checks, but there's no visible on-screen banner/indicator anywhere else confirming an active impersonation session or a one-click stop control outside the staff page itself."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/api/admin/staff/[id]/impersonate + .../impersonation/stop routes, plus components/admin/impersonation-banner.tsx rendered in the admin layout whenever ctx.impersonator is set — same completeness as the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/impersonate/route.ts:1-51; app/(admin)/admin/layout.tsx:59-67", "arm-05": "app/api/staff/[staffId]/route.ts:29-33", "arm-06": "app/api/admin/staff/[id]/impersonate/route.ts; components/admin/impersonation-banner.tsx"}
+  },
+  {
+    "id": "R-100",
+    "name": "Administrative activity log",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "app/(admin)/admin/audit/page.tsx: last-100 AuditLog table (when/actor/action/detail JSON), gated by audit.view permission. Functional, no filtering/search/pagination on the log itself and detail is raw JSON dump, not redacted."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical audit page."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch the audit page."},
+      "arm-05": {"score": 6, "flags": [], "note": "app/admin/audit/page.tsx renders AuditEvent rows (action/details/createdAt) via /api/audit — functional but no permission-gate check visible in the page itself (relies on the API), no filtering, and details are dumped as raw key:value strings, no redaction."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/audit/page.tsx adds real PII redaction (SENSITIVE_METADATA_KEYS hidden unless the viewer holds customers.manage) and color-coded action badges (bootstrap/staff_create/role_change/impersonation/client_error) — a genuine safety improvement over the other arms' raw-JSON dumps."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/audit/page.tsx:1-45", "arm-05": "app/admin/audit/page.tsx:1-30", "arm-06": "app/(admin)/admin/audit/page.tsx:1-40"}
+  },
+  {
+    "id": "R-101",
+    "name": "Test-environment operations console",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/(admin)/admin/test-console/page.tsx: 404s outright when isTestMode() is false, shows open-season stats (orders/packages/notifications), and TestConsoleClient wraps the destructive wipe/reset tools — matches the API's own test-mode gate."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical test-console page."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch the test-console page."},
+      "arm-05": {"score": 7, "flags": [], "note": "app/admin/test-console/page.tsx checks /api/admin/test-console for testMode and only renders seed/wipe/reset buttons when enabled, with window.confirm() gates on destructive actions — functionally solid though less descriptive of what each action preserves."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/test-ops/page.tsx explicitly disables (not 404s) with a clear message when APP_ENV!=='test'; TestOpsConsole lists 4 explicit actions (seed/clear/wipe/reset) each with its own confirm text describing exactly what survives — the clearest UX of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/test-console/page.tsx:1-58", "arm-05": "app/admin/test-console/page.tsx:1-38", "arm-06": "app/(admin)/admin/test-ops/test-ops-console.tsx:1-50"}
+  },
+  {
+    "id": "R-102",
+    "name": "Staff help center + guided tours",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "app/(admin)/admin/help/page.tsx: 6 static guided walkthroughs (POS, package board, print batch, delivery routes, reports/exports, legacy import), each a numbered step list — informative and specific to the app's own screens."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical help page."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch the help page."},
+      "arm-05": {"score": 0, "flags": ["MISSING"], "note": "No help/tour page, component, or route exists anywhere in the tree (grep for help/tour/guided returns nothing) — the feature was never built."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/help/page.tsx: 6 tours each with an intro line plus numbered steps that reference real screen names and behaviors (e.g. reconciliation rerun semantics, legacy import staging) — slightly more detailed/accurate to the rest of the codebase than the clone cluster's version."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/help/page.tsx:1-83", "arm-05": "grep -rl help/tour → no results", "arm-06": "app/(admin)/admin/help/page.tsx:1-104"}
+  },
+  {
+    "id": "R-103",
+    "name": "Test/live environment switch",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "lib/test-mode.ts isTestMode() derives test-vs-live purely from env (TEST_MODE flag or missing STRIPE_SECRET_KEY) — every test-only surface (console nav item, banner) keys off it, but there is no in-app UI link to jump between a live and test deployment; it's a config-time switch, not a click-through one."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical test-mode.ts."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch test-mode.ts."},
+      "arm-05": {"score": 6, "flags": [], "note": "Admin layout shows a static TEST MODE / LIVE MODE text banner driven by process.env.TEST_MODE — informative but, like the clone cluster, offers no cross-deployment link."},
+      "arm-06": {"score": 8, "flags": [], "note": "components/test-mode-banner.tsx implements the switch in both directions: on the test deployment a fuchsia banner includes a 'Go to live ↗' link (env.LIVE_BASE_URL); on the live deployment the header renders a 'Test env ↗' link (env.TEST_BASE_URL) via TestEnvSwitch(). This is the only arm that actually implements a clickable environment switch rather than just a status indicator."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/test-mode.ts:1-11", "arm-05": "app/admin/layout.tsx (inline banner text)", "arm-06": "components/test-mode-banner.tsx:1-37"}
+  },
+  {
+    "id": "R-104",
+    "name": "Admin shell + permission-gated sidebar + mobile nav",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "app/(admin)/admin/layout.tsx: NAV_ITEMS filtered by staff.actingAs.permissions.has(item.permission) — genuinely permission-gated. Fixed-width sidebar (w-52) with no responsive collapse/hamburger for narrow viewports — no mobile nav."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical admin layout."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch the admin layout."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "app/admin/layout.tsx sidebar is a fully static, unconditional list of every admin link regardless of the signed-in staff member's role or permissions — there is no permission filtering in the layout at all (a DRIVER or low-privilege STAFF sees every nav entry, though the underlying pages/APIs presumably still gate access). Mobile: sidebar collapses to a horizontal inline-link row below 700px via CSS, no hamburger."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/layout.tsx builds the nav array conditionally per hasPermission() check (payments/customers/email/fulfillment/catalog/settings/staff/audit each gate their own section) plus a forbidden() redirect for non-admin roles. Sidebar component uses 'overflow-x-auto ... md:w-52 md:flex-col' — a horizontal-scroll nav on mobile, vertical sidebar on desktop — the most complete mobile-responsive + permission-gated combo of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/layout.tsx:12-32,41-47", "arm-05": "app/admin/layout.tsx (static Link list, no permission check)", "arm-06": "app/(admin)/admin/layout.tsx:13-68; components/admin/sidebar.tsx:12-34"}
+  },
+  {
+    "id": "R-105",
+    "name": "Shared admin list controls (search/pagination/sort/badges)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/orders/list.ts (parseOrderListFilters/listOrders/ORDERS_PAGE_SIZE) + app/(admin)/admin/orders/page.tsx: real search box (order#/reference/customer), status/payment-status selects, page links, and shared components/admin/order-badges.tsx (OrderStatusBadge/PaymentStatusBadge) reused across order rows/detail."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical lib/orders/list.ts and order-badges.tsx."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch lib/orders/list.ts or order-badges.tsx."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "No dedicated orders list page exists at all (only app/admin/orders/[orderId] detail); the Operations page hard-caps to 'orders.filter(...).slice(0, 100)' with no search box, no sort control, and no pagination UI anywhere in the admin surface. No shared badge/pagination component exists in the tree."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/admin/order-list.ts (parseOrderListParams/buildOrderWhere/buildListHref/clampPage/pageCount/LIST_PAGE_SIZES) + components/admin/pagination-nav.tsx (explicitly commented 'Shared Prev/Next for the admin list pages (R-105)') + components/admin/order-badges.tsx — genuinely reusable, URL-driven search/filter/sort/pagination infrastructure, the most systematic of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/orders/list.ts; app/(admin)/admin/orders/page.tsx:1-70; components/admin/order-badges.tsx", "arm-05": "app/admin/operations/page.tsx:66 (slice(0,100), no controls)", "arm-06": "components/admin/pagination-nav.tsx:1-39; lib/admin/order-list.ts"}
+  },
+  {
+    "id": "R-106",
+    "name": "Admin chrome links (visit-store, alert banner, back link)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "app/(admin)/admin/layout.tsx: 'Visit store ↗' link in the sidebar footer, an amber 'No season is open' alert banner (data-testid=admin-alert-banner) shown whenever no season is open, and an impersonation banner with a stop button — no explicit generic 'back' link component, but detail pages (e.g. orders/[id]) implement their own back links."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical layout chrome."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch the admin layout chrome."},
+      "arm-05": {"score": 6, "flags": [], "note": "app/admin/layout.tsx: 'Visit store' link and a static '← Back to admin overview' link on every page (less useful than a contextual back-link, but present everywhere) plus a TEST/LIVE MODE alert line; no closed-season alert banner distinct from the mode banner."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/layout.tsx: 'Visit store ↗' header link, a closed-season banner explicitly commented 'R-106', an impersonation banner, plus a dedicated reusable components/admin/back-link.tsx used on detail pages — the only arm with a genuinely shared/reusable back-link component."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/layout.tsx:48-67,83-88", "arm-05": "app/admin/layout.tsx", "arm-06": "app/(admin)/admin/layout.tsx:75-90; components/admin/back-link.tsx"}
+  },
+  {
+    "id": "R-188",
+    "name": "shadcn-style UI kit",
+    "scores": {
+      "arm-01": {"score": 5, "flags": [], "note": "components/ui/{badge,button,card,input,modal}.tsx: hand-rolled variant-based components (Button variant=primary/secondary/danger, Badge tone=brand/neutral/danger/success) using a cn() helper — conceptually shadcn-adjacent (variant props + Tailwind + cn) but no Radix primitives, no CVA, no shadcn CLI scaffolding, and only 5 primitives (no Dialog/Dropdown/Tabs/Tooltip/Select as separate primitives — Select lives in input.tsx)."},
+      "arm-02": {"score": 5, "flags": ["CLONE-TIE"], "note": "Byte-identical components/ui/*."},
+      "arm-03": {"score": 5, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 5, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch components/ui/*."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "No components/ui directory exists at all — the app renders plain HTML elements with global CSS classes (className=\"button\"/\"card\"/\"eyebrow\") defined in app/styles.css. No component-based UI kit of any kind, shadcn-style or otherwise."},
+      "arm-06": {"score": 6, "flags": [], "note": "components/ui/{badge,button,card,dialog,filter-chip,input,label,select,address-fields}.tsx — 9 primitives including a real Dialog and a FilterChip, plus clsx+tailwind-merge dependencies for a cn() utility, which is the actual shadcn convention (though components are still hand-written, not Radix-backed or CLI-scaffolded)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "components/ui/button.tsx:1-28; components/ui/badge.tsx:1-29", "arm-05": "find components/ui → none; app/styles.css:1-81", "arm-06": "components/ui/ (9 files); package.json clsx/tailwind-merge deps"}
+  },
+  {
+    "id": "R-189",
+    "name": "Custom UI primitives (confirm/empty/FAB/info-hint/page-header/pill/price-tag/smart-select/callout)",
+    "scores": {
+      "arm-01": {"score": 1, "flags": ["MISSING"], "note": "Targeted search for confirm/empty/fab/info-hint/page-header/pill/price-tag/smart-select/callout across components/ and app/ returns zero matches — none of these named primitives exist; confirmation flows use plain window.confirm() or ad-hoc buttons, not a shared component."},
+      "arm-02": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical component set — same absence."},
+      "arm-03": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01/02 — same absence."},
+      "arm-04": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "arm-04's diffs don't add any of these primitives."},
+      "arm-05": {"score": 0, "flags": ["MISSING"], "note": "No matches for any of the nine named primitives; no components/ui directory exists at all in this arm."},
+      "arm-06": {"score": 2, "flags": ["MISSING"], "note": "Only 2 partial hits: components/order-builder/mobile-cart-fab.tsx (a real FAB, but storefront-only, not a generic admin/app-wide primitive) and app/invite/[token]/confirm-invite-button.tsx (a one-off confirm button, not a shared Confirm dialog primitive). None of empty-state/info-hint/page-header/pill/price-tag/smart-select/callout exist anywhere."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "grep -riE confirm|empty|fab|hint|page-header|pill|price-tag|smart-select|callout components/ app/ → no matches", "arm-05": "same search → no matches, no components/ui dir", "arm-06": "components/order-builder/mobile-cart-fab.tsx; app/invite/[token]/confirm-invite-button.tsx (only 2 loose hits)"}
+  },
+  {
+    "id": "R-190",
+    "name": "Design tokens + global styles + brand constants",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "app/globals.css defines a flat CSS-variable palette (--brand/--brand-strong/--brand-soft/--accent/--surface/--border/--muted/--danger/--success) mapped into a Tailwind @theme block, plus lib/brand.ts (BRAND.name/shortName/tagline) used in layout metadata and the admin sidebar. Single-shade tokens (no 50-900 scale)."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical globals.css and lib/brand.ts."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch globals.css or lib/brand.ts."},
+      "arm-05": {"score": 5, "flags": [], "note": "app/styles.css defines a small CSS-variable palette (--ink/--paper/--accent/--muted/--line) with real responsive breakpoints for storefront + admin shell, but there is no lib/brand.ts — the org name/tagline are hardcoded inline in individual pages rather than centralized brand constants."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/globals.css defines a fuller Tailwind @theme token scale (brand-50/100/200/600/700/900, accent-100/500/600) plus lib/brand.ts (BRAND.orgName/productName/tagline/supportEmail) — a proper shaded design-token scale, richer than the clone cluster's flat single-shade tokens."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/globals.css:1-39; lib/brand.ts:1-5", "arm-05": "app/styles.css:1-9 (no lib/brand.ts)", "arm-06": "app/globals.css:1-21; lib/brand.ts:1-7"}
+  },
+  {
+    "id": "R-191",
+    "name": "Global error page + root layout (client error reporting)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/error.tsx reports a redacted {message (digest-first, 500-char cap), path} to /api/client-error on mount, with a friendly retry UI; app/global-error.tsx is a plain-HTML fallback (no reporting, by design since layout/CSS may be unavailable — reasonable tradeoff); app/api/client-error/route.ts rate-limits (10/min/IP) and strips control characters before logging."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical error.tsx/global-error.tsx/client-error route."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "arm-04's diffs don't touch the error pages or client-error route."},
+      "arm-05": {"score": 2, "flags": ["THEATER", "BROKEN"], "note": "app/error.tsx (doubles as GlobalError) claims 'The error was recorded without exposing internal details' but never calls fetch or any reporting function — grep confirms zero callers of /api/client-error anywhere in the codebase despite the route itself existing and being fully implemented. The UI's claim is false; this is dead/disconnected code, not a working feature."},
+      "arm-06": {"score": 9, "flags": [], "note": "Both app/error.tsx AND app/global-error.tsx call /api/client-error (message + url + first stack line) on mount — global-error.tsx even inlines styles since globals.css may not load, a detail the other arms miss. Server route rate-limits (30/min) and caps field lengths. Most complete of the six — reports from both error boundaries, not just one."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/error.tsx:1-37; app/global-error.tsx:1-15; app/api/client-error/route.ts:1-24", "arm-05": "app/error.tsx:1-14 (no fetch call); grep for api/client-error callers → none", "arm-06": "app/error.tsx:1-41; app/global-error.tsx:1-51"}
+  },
+  {
+    "id": "R-192",
+    "name": "Marketing imagery assets",
+    "scores": {
+      "arm-01": {"score": 1, "flags": ["MISSING"], "note": "public/ contains only the unmodified create-next-app default SVGs (globe.svg, next.svg, window.svg, vercel.svg, file.svg) — no Purim/Tomchei-Shabbos-specific marketing imagery, hero graphics, or brand assets were ever added."},
+      "arm-02": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical public/ directory — same unmodified scaffold SVGs."},
+      "arm-03": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01/02."},
+      "arm-04": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "arm-04's diffs don't touch public/."},
+      "arm-05": {"score": 0, "flags": ["MISSING"], "note": "No public/ directory exists at all in this workspace — zero static assets of any kind, marketing or otherwise."},
+      "arm-06": {"score": 0, "flags": ["MISSING"], "note": "No public/ directory exists at all in this workspace either — zero static assets, not even the default Next.js scaffold images."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-02",
+    "evidence": {"arm-01": "public/: globe.svg, next.svg, window.svg, vercel.svg, file.svg (all unmodified create-next-app defaults)", "arm-05": "no public/ directory found", "arm-06": "no public/ directory found"}
+  }
+]

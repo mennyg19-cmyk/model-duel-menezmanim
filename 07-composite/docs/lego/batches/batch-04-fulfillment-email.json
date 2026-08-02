@@ -1,0 +1,363 @@
+[
+  {
+    "id": "R-072",
+    "name": "Fulfillment channel dashboard + bulk status actions",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Channel table (NEW/PRINTED/PACKED/Done) with gifts/packages/boxes-saved columns; FulfillmentActions bulk-moves NEW→PRINTED→PACKED→SENT/PICKED_UP per channel via /api/admin/packages/bulk-stage."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical fulfillment dashboard; the arm's unique files (checkout/fees/driver-access/margin) don't touch this item."},
+      "arm-05": {"score": 6, "flags": [], "note": "app/admin/packages/page.tsx has channel package-count cards + checkbox bulk-status buttons (printed/packed/sent/picked-up) and regroup, but no per-stage breakdown table per channel — coarser than the spec's grid."},
+      "arm-06": {"score": 9, "flags": [], "note": "Per-channel Card with full stage-count list, checkbox-level bulk-advance to ANY target PackageStage (not just the next stage), production summary card, plus reprint-by-filing-group. Most granular of all six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/fulfillment/page.tsx; components/admin/fulfillment-actions.tsx; lib/packages/board.ts",
+      "arm-05": "app/admin/packages/page.tsx; app/api/admin/packages/route.ts",
+      "arm-06": "app/(admin)/admin/fulfillment/page.tsx; app/(admin)/admin/fulfillment/fulfillment-actions.tsx; lib/packages/fulfillment.ts"
+    }
+  },
+  {
+    "id": "R-073",
+    "name": "Fulfillment production + savings summaries",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "\"Boxes saved\" column (groupingSavings) plus a print-production explainer table of recent batches; totals shown per channel, not a dedicated dollar-savings card."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 6, "flags": [], "note": "productionUnits/consolidatedItems summary cards on the packages page — item counts only, no dollar-value savings summary."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated Production card (to print / to pack / to send) AND a Bulk consolidation savings card with destinations, recipients consolidated, fees collected, and fees avoided in dollars — the most complete savings summary of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/fulfillment/page.tsx (totalSavings, groupingSavings)",
+      "arm-05": "app/admin/packages/page.tsx (summary.productionUnits/consolidatedItems)",
+      "arm-06": "app/(admin)/admin/fulfillment/page.tsx (summary.production, summary.bulkSavings); lib/packages/fulfillment.ts"
+    }
+  },
+  {
+    "id": "R-074",
+    "name": "Delivery route builder (Mapbox)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "buildRoute() geocodes stops through a TTL cache that calls Mapbox's geocoding API only when MAPBOX_ACCESS_TOKEN is set (falls back to a deterministic local-street-offset); stop ORDER always uses its own nearest-neighbor, never Mapbox. Visual map is a hand-rolled SVG with an explicit \"swap for Mapbox GL when a token exists\" comment — no live Mapbox map."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical geocode/route-builder/SVG-map code."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "lib/routes/driver-access.ts and lib/shipping/margin.ts (the two files flagged as arm-04-unique) diff from arm-02 by only a trailing newline — functionally identical route-builder behavior."},
+      "arm-05": {"score": 5, "flags": [], "note": "geocodeAddress() actually THROWS if MAPBOX_ACCESS_TOKEN is missing outside TEST_MODE (stricter dependency on Mapbox than the clone cluster), but stop order is a naive lat-then-lng sort, not real nearest-neighbor/optimization, and there is no map visualization at all."},
+      "arm-06": {"score": 8, "flags": [], "note": "Real Mapbox Optimized-Trips v1 API call for stop ORDERING (documented endpoint/params, waypoint_index re-sort) with a deterministic nearest-neighbor fallback on any failure/over-limit; UI surfaces which optimizer ran (\"ordered by Mapbox\" vs nearest-neighbor). Geocoding itself is deterministic-dev only (no Mapbox geocoding), and there's no visual map component."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/routes/service.ts (buildRoute); lib/addresses/geocode.ts (mapboxCoordinates); components/admin/route-map.tsx (SVG)",
+      "arm-05": "lib/delivery.ts (mapboxCoordinates throws without token; createRoute sorts by lat/lng)",
+      "arm-06": "lib/routes/optimize.ts (orderStopsMapbox via optimized-trips v1); lib/customers/geocode.ts (deterministic-dev only)"
+    }
+  },
+  {
+    "id": "R-075",
+    "name": "Route administration (list/detail/reassign/print)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "/admin/routes list + /admin/routes/[id] detail with driver reassign dropdown (DriverAssign), reroute suggestions, print-sheet and print-cards links, magic-link panel."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical (driver-access.ts/margin.ts diffs are whitespace-only and unrelated to this UI)."},
+      "arm-05": {"score": 4, "flags": [], "note": "Single /admin/delivery page combines builder+list; no per-route detail view. reassignRoute exists as a backend action (app/api/admin/delivery/[routeId]/route.ts) but the UI never calls it — driver shown read-only. Print-route and print-cards links present on the list."},
+      "arm-06": {"score": 9, "flags": [], "note": "/admin/routes list + /admin/routes/[routeId] full detail: seq-ordered stops, reassign to sibling PLANNED routes, manager-confirmed reroute, manifest + greeting-card print links, and a readable route-event audit trail — the most complete route-admin surface."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/routes/page.tsx; app/(admin)/admin/routes/[id]/page.tsx; components/admin/route-actions.tsx",
+      "arm-05": "app/admin/delivery/page.tsx; app/api/admin/delivery/[routeId]/route.ts (reassignRoute exists, unused in UI)",
+      "arm-06": "app/(admin)/admin/routes/[routeId]/page.tsx; app/(admin)/admin/routes/[routeId]/route-actions.tsx; lib/routes/builder.ts"
+    }
+  },
+  {
+    "id": "R-076",
+    "name": "Greeting cards print view per route",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "renderRouteGreetingCards() reuses the org's 5x7 card renderer per stop's greeting text, filing-grouped by route name."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 5, "flags": [], "note": "Greeting cards are folded into the same routePrintDocument() as the driver manifest — just \"To {name}\" + greeting text lines, not a distinct card-stock layout/PDF."},
+      "arm-06": {"score": 8, "flags": [], "note": "renderRouteCardsPdf(): dedicated 6x4 card-sized PDF page per stop with a greeting, centered text layout, skips greetingless stops, and renders a placeholder page when a route has none."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/routes/print.ts (renderRouteGreetingCards)",
+      "arm-05": "lib/delivery.ts (routePrintDocument includeGreetingCards)",
+      "arm-06": "lib/routes/print.ts (renderRouteCardsPdf)"
+    }
+  },
+  {
+    "id": "R-077",
+    "name": "Driver route list (messenger portal)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "/d/[token] magic-link page (PIN gate, stop list) plus an informational logged-in /driver home explaining the magic-link model."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Confirmed via direct diff of lib/routes/driver-access.ts — only a trailing-newline difference from arm-02."},
+      "arm-05": {"score": 7, "flags": [], "note": "/driver/[token] page with PIN entry and stop list is present and functional; no separate informational driver home page."},
+      "arm-06": {"score": 9, "flags": [], "note": "/driver informational home + /drive/[token] full app; driver-link security is materially stronger — escalating PIN lockout (10m→20m→…→12h, permanent after 10 lockouts), HMAC-signed PIN cookie scoped to the link's own expiry."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/d/[token]/page.tsx; app/(driver)/driver/page.tsx",
+      "arm-05": "app/driver/[token]/page.tsx",
+      "arm-06": "app/(driver)/driver/page.tsx; app/(driver)/drive/[token]/page.tsx; lib/routes/links.ts (escalating PIN lockout)"
+    }
+  },
+  {
+    "id": "R-078",
+    "name": "Driver stop cards + route start/delivery completion",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "DriverRouteActions: start-route button captures day-of notifications idempotently, per-stop cards with Google Maps deep link and Delivered tap; last stop completes the route and expires the link."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical (verified via direct diff of driver-access.ts)."},
+      "arm-05": {"score": 7, "flags": [], "note": "startDriverRoute/deliverDriverStop mirror the same start→notify→deliver→complete flow with maps links and delivered stamps; solid but slightly less UI polish."},
+      "arm-06": {"score": 9, "flags": [], "note": "drive-app.tsx: big-tap-target cards, \"already started\"/notified-count feedback on start, route-completion messaging, and an explicit greeting-card handoff reminder per stop — the most complete driver UX."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "components/driver/route-client.tsx; lib/routes/service.ts (startRoute, markStopDelivered)",
+      "arm-05": "lib/delivery.ts (startDriverRoute, deliverDriverStop); app/driver/[token]/page.tsx",
+      "arm-06": "app/(driver)/drive/[token]/drive-app.tsx; lib/routes/lifecycle.ts"
+    }
+  },
+  {
+    "id": "R-079",
+    "name": "Follow-up call center",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "/admin/follow-up with exactly the spec's 3 filtered work lists — open balances, unclaimed pickups, undelivered route stops — each with customer contact detail in the row."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "No follow-up/call-center screen exists anywhere. Confirmed by grep (no matches for follow-up|followUp|call-center|unclaimed in lib/) and by arm-05's own AGGREGATE-REVIEW-P9.md, which independently flags this exact deliverable as missing (\"no call-center view, no follow-up filters, no R-079 wiring anywhere\"). Only a passing \"drafts waiting for follow-up\" stat exists in the operations dashboard."},
+      "arm-06": {"score": 7, "flags": [], "note": "/admin/follow-ups with reason filters, but the 3 reasons are payment / pickup / bulk-scheduled — \"bulk-scheduled\" substitutes for the spec's \"undelivered route stops\" category, so it's a close but not exact match to the 3 canonical queues."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/follow-up/page.tsx (UnpaidList/UnclaimedList/UndeliveredList)",
+      "arm-05": "results/AGGREGATE-REVIEW-P9.md line 68 (self-flagged missing); app/admin/operations/page.tsx (only a passing stat)",
+      "arm-06": "app/(admin)/admin/follow-ups/page.tsx; lib/admin/follow-ups.ts (payment/pickup/bulk reasons)"
+    }
+  },
+  {
+    "id": "R-080",
+    "name": "Automated payment + pickup follow-up (cron)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "payment-reminders cron reminds every FINALIZED order with an open balance, deduped per order per calendar day; separate pickup-expiry cron stamps overdue ready pickups expired."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 4, "flags": [], "note": "sendPaymentReminders() is mis-scoped: it only reminds customers with a bulkDeliverySchedule whose order.paymentStatus === PENDING, missing general unpaid finalized orders entirely (a materially narrower cron than the name implies). Pickup expiry (expirePickupPackages) is a separate, correct sweep."},
+      "arm-06": {"score": 9, "flags": [], "note": "sweepPaymentReminders() with a configurable cadence (first reminder after initialAfterDays, then every intervalDays via lastPaymentReminderAt) plus a CronRun audit row per run; sweepPickupExpiry() runs a readiness sync before the expiry pass — most sophisticated cadence of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/api/cron/payment-reminders/route.ts; app/api/cron/pickup-expiry/route.ts",
+      "arm-05": "lib/delivery.ts (sendPaymentReminders — scoped to bulkDeliverySchedule only)",
+      "arm-06": "lib/payments/reminders.ts (sweepPaymentReminders); lib/pickup/readiness.ts (sweepPickupExpiry)"
+    }
+  },
+  {
+    "id": "R-081",
+    "name": "Shipment planning + bin packing",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "planParcels(): real first-fit-decreasing multi-box bin packing (items sorted by volume, boxes tried smallest-first, 85% usable-volume ratio), with an oversized-item fallback that ships as its own dimensions rather than failing."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical bin-packing algorithm."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/shipping/margin.ts diff confirms only trailing-newline change; bin-packing file (lib/shipping/bin-packing.ts) untouched by arm-04's unique-file list."},
+      "arm-05": {"score": 3, "flags": ["THEATER"], "note": "parcelForPackage() sums ALL product volumes into one scalar and picks the smallest PackageType whose box volume >= that sum — no per-axis dimension check, no multi-box split, exactly one ShipmentBox per package always. Arm-05's own AGGREGATE-REVIEW-P8.md independently confirms: \"'Bin packing' is a single-box volume-sum selection, not bin packing.\""},
+      "arm-06": {"score": 8, "flags": [], "note": "planParcels(): best-fit-decreasing multi-parcel packing (smallest-fitting-open-parcel search, 85% fill ratio) — arguably a better placement heuristic than first-fit — but throws a hard DomainRuleError on an item that fits no configured box instead of gracefully shipping it as its own parcel."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "lib/shipping/bin-packing.ts (planParcels)",
+      "arm-05": "lib/shipping.ts (parcelForPackage, boxVolume); results/AGGREGATE-REVIEW-P8.md line 68 (self-flagged)",
+      "arm-06": "lib/shipping/packing.ts (planParcels — best-fit, hard-fails on no-fit)"
+    }
+  },
+  {
+    "id": "R-082",
+    "name": "Email hub (5-tab management)",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "Dedicated /admin/email hub with 4 tabs (Campaigns, Lists, Subscribers, Templates) — functional, but branding and the test-sender live separately in Settings > Email, and there's no distinct \"Triggered\" tab (overrides are folded into Templates)."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 2, "flags": ["MISSING", "STUB"], "note": "No hub exists — email is one <section> embedded inside the generic Settings <form>, with campaign create/send/test-send only. List creation, member management, and template editing all have backend support (lib/email.ts) but zero UI to invoke them."},
+      "arm-06": {"score": 9, "flags": [], "note": "/admin/email renders exactly the tabbed hub the spec describes and then some — Campaigns, Subscribers, Lists, Templates, Triggered, and a Send-log tab, each fully wired to its own API routes."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/email/page.tsx; components/admin/email-hub.tsx (4 tabs)",
+      "arm-05": "app/admin/settings/page.tsx (section id=\"email\", inside the settings <form>)",
+      "arm-06": "app/(admin)/admin/email/page.tsx; components/admin/email/email-tabs.tsx (6 tabs)"
+    }
+  },
+  {
+    "id": "R-083",
+    "name": "Campaign builder + send",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Create draft, preview-as-recipient, test-send, send/re-run, with an outbox status summary line; sendCampaign() dedupes queued addresses on campaign|id|email so a re-run never double-queues."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 6, "flags": [], "note": "createCampaign/sendCampaign/testSendCampaign are functional (dedupeKey via skipDuplicates), but there is no preview feature and the builder form lives awkwardly inside the Settings <form>."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated /admin/email/campaigns/[id] page: draft editor, branding-accurate preview (renderCampaignPreview), test-send, send/re-run with a per-recipient status/attempts/lastError table — most complete lifecycle of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/email/campaigns.ts (sendCampaign, renderCampaignBody); components/admin/email-hub.tsx (CampaignsTab)",
+      "arm-05": "lib/email.ts (createCampaign, sendCampaign, testSendCampaign)",
+      "arm-06": "app/(admin)/admin/email/campaigns/[id]/page.tsx; components/admin/email/campaign-editor.tsx; lib/email/campaigns.ts"
+    }
+  },
+  {
+    "id": "R-084",
+    "name": "Subscriber + mailing-list management",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Lists tab: create list, add/remove member by email. Subscribers tab: search by email, shows status/list-memberships/preference flags (read-only — preferences are self-service via signed links, by design)."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 2, "flags": ["STUB"], "note": "createEmailList/addSubscriberToEmailList exist in lib/email.ts and are exposed via /api/admin/email (create_list, add_list_member actions), but nothing in the UI calls them — lists render as a read-only comma-joined string in Settings."},
+      "arm-06": {"score": 9, "flags": [], "note": "Lists tab: create list, per-list member add/remove with an unsubscribed badge; Subscribers tab shows preference flags and list membership. Fully wired end to end."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "components/admin/email-hub.tsx (ListsTab, SubscribersTab); app/api/admin/email/lists/[id]/members/route.ts",
+      "arm-05": "lib/email.ts (createEmailList, addSubscriberToEmailList — unused by any UI)",
+      "arm-06": "components/admin/email/lists-tab.tsx; components/admin/email/subscribers-tab.tsx"
+    }
+  },
+  {
+    "id": "R-085",
+    "name": "Email templates + branding",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Templates tab: per-key subject/body override + enable/disable + reset-to-default. Settings > Email tab has editable from-address, reply-to, and branding-footer inputs that are appended to every outgoing email by the dispatcher."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 2, "flags": ["STUB"], "note": "updateEmailTemplate() (subject/body/branding) exists in lib/email.ts and is wired to /api/admin/email, but the Settings UI only ever displays templates read-only (\"<strong>{key}</strong> · {subject} · custom/default branding\") — no edit form for either subject/body or branding anywhere."},
+      "arm-06": {"score": 7, "flags": [], "note": "Templates tab is fully CRUD (create/edit subject+body, save) — better than the clone cluster's override-only model. However there is NO UI anywhere to edit branding (fromName/fromEmail/footerText) — getEmailBranding() only reads a seeded setting; Settings > Email only shows delivery mode + a test sender, not branding fields."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "components/admin/email-hub.tsx (TemplatesTab); components/admin/settings/email-tab.tsx (from/reply-to/footer inputs)",
+      "arm-05": "app/admin/settings/page.tsx (templates displayed via <details>, no edit form)",
+      "arm-06": "components/admin/email/templates-tab.tsx (full CRUD); lib/email/render.ts (getEmailBranding — seed-only, no edit UI)"
+    }
+  },
+  {
+    "id": "R-086",
+    "name": "Triggered/transactional emails + overrides + idempotency",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "TEMPLATE_DEFAULTS registry (order_confirmation/payment_link/refund_notice/test_email); resolveTemplate() merges the coded default with a per-key EmailTemplate override + isEnabled flag; every enqueue is deduped via captureNotification's dedupeKey."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 6, "flags": [], "note": "defaultTemplates registry + templateFor()/updateEmailTemplate() (per-key override, backend-only) + dedupeKey-based idempotent queueing (queueEmail upsert on dedupeKey). Functionally present but the override path has no UI (see R-085)."},
+      "arm-06": {"score": 9, "flags": [], "note": "TRIGGERED_DEFAULTS registry (order_confirmation/payment_link/refund_issued/subscription_manage) with a fully-wired Triggered tab: enable/disable, subject override, body override, AND link-a-saved-template override, with a documented resolution order (override > linked template > coded default)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/email/templates.ts (TEMPLATE_DEFAULTS, resolveTemplate)",
+      "arm-05": "lib/email.ts (defaultTemplates, templateFor, updateEmailTemplate)",
+      "arm-06": "lib/email/triggered.ts (TRIGGERED_DEFAULTS, enqueueTriggeredEmail); components/admin/email/triggered-tab.tsx"
+    }
+  },
+  {
+    "id": "R-087",
+    "name": "Order lifecycle emails (confirmation/payment link/refund)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "enqueueOrderLifecycleEmails() runs inside finalizeOrder's transaction (confirmation always, payment-link if a balance remains); enqueueRefundEmail() keyed by stripeRefundId so a replayed webhook enqueues once."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 7, "flags": [], "note": "queueOrderLifecycleEmail() correctly called at all 3 real call sites (checkout finalize → ORDER_CONFIRMATION, unpaid checkout → PAYMENT_LINK, Stripe refund webhook → REFUND), each with a dedupeKey guarding re-delivery."},
+      "arm-06": {"score": 8, "flags": [], "note": "enqueueOrderConfirmationTx/enqueueRefundEmailTx run inside the causing transaction; payment-link is a deliberate staff action (sendPaymentLinkEmail) rather than automatic-on-finalize, guarded by an outstanding-balance check and audited."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "lib/email/transactional.ts (enqueueOrderLifecycleEmails, enqueueRefundEmail)",
+      "arm-05": "lib/checkout.ts (queueOrderLifecycleEmail call sites); app/api/stripe/webhook/route.ts",
+      "arm-06": "lib/email/order-emails.ts (enqueueOrderConfirmationTx, enqueueRefundEmailTx, sendPaymentLinkEmail)"
+    }
+  },
+  {
+    "id": "R-088",
+    "name": "Transactional outbox + retrying sweeper",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "sweepNotificationOutbox(): conditional-UPDATE claim (pending/sending→claimed) so overlapping sweeps can't double-claim a row, stale-claim reclaim after 10 minutes, and a [1,5,15,60]-minute backoff schedule over MAX_ATTEMPTS=5."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 7, "flags": [], "note": "sweepEmailOutbox(): claim via updateMany on status=PENDING, stale PROCESSING reclaim after 10 minutes, fixed-delay retry (attemptCount * 60s) up to MAX_OUTBOX_ATTEMPTS=3, EmailLog row per outcome. Solid, marginally less backoff sophistication than the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "sweepOutbox() shares one claim/deliver module (lib/email/claim-deliver.ts) with the campaign send loop and test-sends, records a CronRun audit row per sweep, and deliberately excludes campaign-recipient and test-send kinds from auto-retry (an explicit, documented policy the other arms don't have)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/email/dispatch.ts (sweepNotificationOutbox, dispatchOne)",
+      "arm-05": "lib/email.ts (sweepEmailOutbox)",
+      "arm-06": "lib/email/outbox-sweep.ts (sweepOutbox); lib/email/claim-deliver.ts"
+    }
+  },
+  {
+    "id": "R-089",
+    "name": "Email campaign lifecycle UI (draft/sent lists)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Campaigns tab lists every campaign with a DRAFT/SENT badge, preview, test-send, and send/re-run buttons, plus an outbox status line."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 5, "flags": [], "note": "Campaign list with name/subject/status and test-send/send buttons exists, but it's embedded inside the Settings <form> (mixed submit-context, self-flagged in arm-05's own AGGREGATE-REVIEW-P11.md) with no preview and no per-recipient detail."},
+      "arm-06": {"score": 9, "flags": [], "note": "Campaigns tab (list with status/recipient-count/sentAt/lastError) links to a full campaign detail page with a per-recipient status/attempts/providerId/lastError table — most complete lifecycle visibility of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "components/admin/email-hub.tsx (CampaignsTab)",
+      "arm-05": "app/admin/settings/page.tsx (campaign list inside <form>); results/AGGREGATE-REVIEW-P11.md line 142 (self-flagged form-nesting issue)",
+      "arm-06": "components/admin/email/campaigns-tab.tsx; app/(admin)/admin/email/campaigns/[id]/page.tsx"
+    }
+  },
+  {
+    "id": "R-090",
+    "name": "Email test sender",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Settings > Email > \"Send test email\" runs the live delivery path right now and reports sent/captured/error outcome inline."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-05": {"score": 7, "flags": [], "note": "sendTestEmail() queues an EMAIL_PLATFORM_TEST row through the same outbox/sweep path and the UI reports \"captured\" vs \"sent\" — solid, though indirect (queued, not synchronous) compared to the other two arms."},
+      "arm-06": {"score": 9, "flags": [], "note": "Settings > Email test form calls /api/admin/settings/email-test, which sends through the REAL dispatch path synchronously and reports delivered + providerId, or the exact error — the most direct/honest test-send of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "components/admin/settings/email-tab.tsx; app/api/admin/email/test/route.ts",
+      "arm-05": "lib/email.ts (sendTestEmail); app/admin/settings/page.tsx (sendPlatformTest)",
+      "arm-06": "app/(admin)/admin/settings/settings-tabs.tsx (email-test-form); app/api/admin/settings/email-test/route.ts"
+    }
+  }
+]

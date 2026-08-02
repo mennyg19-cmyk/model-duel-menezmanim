@@ -1,0 +1,347 @@
+[
+  {
+    "id": "R-049",
+    "name": "Permission-aware admin dashboard + KPIs + recent orders",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/(admin)/admin/page.tsx: 4 KPIs (finalized orders, orders today, needs-payment, season revenue) + recent-orders list, gated on admin:view with a separate audit:view-gated security-activity panel; real getOperationsDashboard() with bounded parallel queries."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "app/(admin)/admin/page.tsx: only 3 KPIs (placed today, unpaid/partial, paid open) + a Today-queue preview + recent orders, all behind a single broad admin.access gate (dashboardKpis()/todayWorkQueue() in lib/ops/orders.ts) — real and clean, but coarser permission granularity and fewer KPIs than the arm-01/04 cluster."},
+      "arm-04": {"score": 9, "flags": [], "note": "app/(admin)/admin/page.tsx: 4 KPIs (orders this season, placed today, billed, outstanding) + Today-queue preview + recent orders + audit panel, gated dashboard.view with a genuinely graceful degradation — a staffer with dashboard.view but not orders.view sees the shell and an explicit 'sales figures are hidden' message instead of an empty/broken grid. lib/admin/dashboard.ts."},
+      "arm-05": {"score": 2, "flags": ["STUB", "THEATER"], "note": "app/admin/page.tsx is a static marketing-style shell with 7 link cards ('Order operations', 'Walk-in POS', etc.) — zero KPIs, zero DB queries, zero permission gating. All real dashboard-ish data (order/customer counts, paid total) lives instead in the unrelated /admin/operations page."},
+      "arm-06": {"score": 9, "flags": [], "note": "requireStaff() + hasPermission() gate KPI cards (orders today, revenue today, awaiting collection, in-flight checkouts) and queues; only renders full dashboard for payments.manage; adds a customers.manage-gated link. Clean lib/admin/dashboard.ts with bounded parallel queries."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "app/(admin)/admin/page.tsx; lib/admin/dashboard.ts", "arm-05": "app/admin/page.tsx", "arm-06": "app/(admin)/admin/page.tsx; lib/admin/dashboard.ts"}
+  },
+  {
+    "id": "R-050",
+    "name": "Daily operations \"Today\" work queue",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Dedicated /admin/today page (getTodayQueue): one combined query (new-today OR finalized-and-unpaid), ordered oldest-unpaid-first, capped at 100, deep-linkable, admin:view-gated — real and usable, but a single undifferentiated queue rather than distinct categories."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": [], "note": "todayWorkQueue()/dashboardKpis() in lib/ops/orders.ts: 12-row preview embedded on the dashboard plus a full /admin/today page (up to 100 rows), bounded and ordered oldest-first — good integration between the preview and the full queue."},
+      "arm-04": {"score": 8, "flags": [], "note": "readTodayQueue() surfaces a 'Waiting on payment' queue on the dashboard (reusable OrderQueue component) with a link to the full /admin/today page; permission-gated on dashboard.view+orders.view, clean separation of concerns."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "Operations page shows only a single number ('drafts waiting for follow-up' count, >24h stale) with no actual list/queue to work from — no order-level detail, no click-through triage, no distinction between payment-owed vs. abandoned-draft cases."},
+      "arm-06": {"score": 9, "flags": [], "note": "'Collect payment' queue (FINALIZED + unpaid, oldest first) and 'In-flight checkouts' queue (submitted DRAFT with stock reserved), each a real clickable order list, bounded query, permission-gated."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "app/(admin)/admin/page.tsx; lib/admin/dashboard.ts", "arm-05": "app/admin/operations/page.tsx", "arm-06": "lib/admin/dashboard.ts"}
+  },
+  {
+    "id": "R-051",
+    "name": "Role + per-user permission enforcement",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/permissions.ts: 7 real permissions (admin:view/staff:manage/staff:impersonate/audit:view/settings:manage/payments:manage/orders:manage) with distinct payments vs. orders separation; layout.tsx fully blocks the shell (403 page) when admin:view is missing and filters nav per-permission; staff-manager.tsx has a real per-user grant/deny checkbox editor."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "lib/permissions.ts: only 7 permissions but almost every sensitive route (refunds, POS checkout, catalog writes) is gated on the single broad 'admin.access' rather than a feature-specific permission — real separation-of-powers gap. app/(admin)/layout.tsx also renders {children} bare (no shell, but no block either) when admin.access is missing, relying on every page to self-guard via requireAdminPage. Does have a real per-user grant/deny select-editor in staff-manager.tsx."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/auth/permissions.ts: 19 granular permissions (dashboard/orders.view/orders.manage/fulfillment/customers.view/customers.manage/catalog/media/staff/audit/settings/seasons/routes/email/reports/migration, etc.) with explicit DENY > GRANT > role-default precedence; layout.tsx fully blocks the shell via requirePermission('dashboard.view'); full staff editor UI with per-permission inherit/grant/deny selects. The most complete and granular of the three."},
+      "arm-05": {"score": 3, "flags": ["STUB", "BROKEN"], "note": "API layer is genuinely solid (authorize()/hasStaffPermission() with role defaults + GRANT/DENY overrides, checked on every route), but there is NO middleware and NO page-level guard anywhere under app/admin/** — /admin/layout.tsx and every admin page render unconditionally for anyone who requests the URL (data calls then fail client-side). The staff page also has no UI to edit per-permission overrides despite the API (PATCH /api/staff/[id]) fully supporting it — role change, revoke, impersonate only."},
+      "arm-06": {"score": 9, "flags": [], "note": "requireStaff()+hasPermission('admin.access') with forbidden() at the layout; sidebar built conditionally per permission; full StaffEditor UI with per-permission inherit/grant/deny selects, role change (blocked for self), impersonate, revoke — the most complete override UX of the three examined."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "lib/auth/permissions.ts; app/(admin)/admin/staff/[staffUserId]/page.tsx", "arm-05": "lib/route-auth.ts; app/admin/layout.tsx (no guard)", "arm-06": "app/(admin)/admin/layout.tsx; app/(admin)/admin/staff/[id]/staff-editor.tsx"}
+  },
+  {
+    "id": "R-052",
+    "name": "Searchable filterable order list",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/(admin)/admin/orders/page.tsx: text search (order#/ref/name/email), status dropdown, payment dropdown, prev/next pagination, permission-gated bulk-repeat, all URL-driven via listOrders()."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "components/admin/orders-list.tsx: real search + status/payment filters + pagination + bulk repeat/status actions, functionally complete, but client-side React state (fetch-on-mount) rather than URL-driven — not bookmarkable/shareable, and a hard refresh loses the filter."},
+      "arm-04": {"score": 9, "flags": [], "note": "app/(admin)/admin/orders/page.tsx (order desk): URL-driven search + status/payment filters with live per-status counts (countOrdersByStatus), page-size selector, bounded queries built for a thousand-order Purim morning, robust permission-gated bulk actions (bulkAction)."},
+      "arm-05": {"score": 4, "flags": ["STUB"], "note": "No dedicated order-list route exists at all. listOrders() (real: text search + status filter + pagination) is buried as one section of the client-side /admin/operations page with a single shared search box for both orders and customers, no status/payment dropdowns, no page-level permission gate."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated /admin/orders page: search, status dropdown (full enum), payment dropdown (full enum), page-size selector, URL-as-source-of-truth pagination, bounded queries for scale."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "app/(admin)/admin/orders/page.tsx; lib/orders/order-desk.ts", "arm-05": "app/admin/operations/page.tsx; lib/admin-operations.ts#listOrders", "arm-06": "app/(admin)/admin/orders/page.tsx"}
+  },
+  {
+    "id": "R-053",
+    "name": "Full admin order detail + money actions",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Comprehensive: line items with options/add-ons/recipient/method, fee breakdown, donation, balance, payments table with post/void, shipping-label controls per package, repeat button, packing-slip link, per-order audit trail, customer card."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "components/admin/order-detail.tsx: line items, payments with refund UI, shipping-label buy/void/validate, an audit list. Real and wired, but no post/void-payment action (only refund), and the whole page is a single ~300+ line client component fetching everything itself rather than a server-rendered detail with focused sub-components."},
+      "arm-04": {"score": 8, "flags": [], "note": "Order money desk: line items, recipients, packages/carriage card (buy/void/refresh/validate), full OrderActions panel (post/void/refund/repeat/status transitions), partial refunds. Missing an on-page audit trail and a direct link to the customer's detail page — the two real gaps vs. arm-01/06."},
+      "arm-05": {"score": 2, "flags": ["STUB", "MISSING"], "note": "The entire order-detail page is shipping-label controls only ('Manage shipping labels without marking a package sent') — no line items, no customer info, no payment table, no refund button, no audit trail, no packing-slip link. Money actions exist only as an orphaned API route never surfaced here."},
+      "arm-06": {"score": 9, "flags": [], "note": "Lines with add-on rollup, recipients, packages/labels card, full OrderActions panel (post/void/refund with per-payment history), audit trail scoped to order+its payments, customer link. On par with arm-01/06 cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(admin)/admin/orders/[orderId]/page.tsx", "arm-05": "app/admin/orders/[orderId]/page.tsx", "arm-06": "app/(admin)/admin/orders/[orderId]/page.tsx; order-actions.tsx"}
+  },
+  {
+    "id": "R-054",
+    "name": "Refunds (incl. Stripe refund path)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "app/api/admin/orders/[orderId]/refunds/route.ts: payments:manage-gated, DB-first money-loss guard (negative payment row + audit commit BEFORE the Stripe call), stable idempotency key, partial-refund support, rollback on Stripe failure. Wired to a real button on the order page."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "app/api/admin/orders/[id]/refund/route.ts: real DB-first claim then Stripe call with compensation on failure, partial-refund amount supported, and wired to a working refund form on order-detail.tsx — but gated only on the broad 'admin.access' permission, not a payments-specific one, so any staffer with basic admin access can issue a refund."},
+      "arm-04": {"score": 8, "flags": [], "note": "app/(admin)/admin/orders/actions.ts#refundPaymentAction + lib/payments/offline-payments.ts: orders.manage-gated, DB-first locking with the transaction wrapping the Stripe call, wired to a real button. No stated partial-refund UI gap beyond what's in the order actions panel."},
+      "arm-05": {"score": 3, "flags": ["STUB", "THEATER"], "note": "Backend (refundStripePayment) is real — Stripe REST call with idempotency key, DB status update + audit — but only full refunds (no partial amount), Stripe is called BEFORE the DB update (opposite of the safer DB-first pattern), and critically there is NO UI anywhere that calls this endpoint — grep across the whole app/ tree found zero references outside the route itself and the webhook. Unreachable feature for a real admin user."},
+      "arm-06": {"score": 8, "flags": [], "note": "Real Stripe refund via lib/payments/refund, keyless-host guard (422 with operator instructions instead of faking success), local status only flips on Stripe evidence. Wired to a working 'Refund' button per payment row in OrderActions with busy/error state. No partial-refund amount option (full only) — modest gap vs. arm-01."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/admin/orders/[orderId]/refunds/route.ts", "arm-05": "lib/checkout.ts#refundStripePayment (orphaned)", "arm-06": "app/api/admin/payments/[paymentId]/refund/route.ts; lib/payments/refund.ts"}
+  },
+  {
+    "id": "R-055",
+    "name": "Carrier label creation + voiding",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "components/shipping-actions.tsx + app/api/admin/shipping/route.ts: validate/quote/buy/void/refresh-tracking, shows carrier/service/tracking/margin, void blocked once SENT/PICKED_UP."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "app/api/admin/packages/[id]/label/route.ts (create/void/refresh, GET history) wired to buttons directly on order-detail.tsx — real and functional, but gated on the broad 'admin.access' rather than a shipping-specific permission, and void has no required reason/audit note."},
+      "arm-04": {"score": 9, "flags": [], "note": "components/admin/carriage-card.tsx + lib/shipping: buy/void(mandatory reason)/refresh/validate, multi-parcel support with per-parcel status and cost, a visible rate-comparison list showing why a given carrier was chosen — the most complete carrier-label UX of the three."},
+      "arm-05": {"score": 7, "flags": [], "note": "Real, wired-up shipping action buttons on the order page (validate address, buy cheapest label, void label unless SENT, refresh tracking), one unified /shipping route dispatching to lib/shipping.ts. Solid, though this is the ONE genuinely functional slice of arm-05's otherwise-thin order-detail page."},
+      "arm-06": {"score": 8, "flags": [], "note": "Label purchase/void/tracking present on the order-packages-card, consistent with the same pattern as arm-01."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {"arm-04": "components/admin/carriage-card.tsx; lib/shipping/carriage-view.ts", "arm-05": "app/admin/orders/[orderId]/page.tsx; app/api/admin/packages/[packageId]/shipping/route.ts", "arm-06": "app/(admin)/admin/orders/[orderId]/order-packages-card.tsx"}
+  },
+  {
+    "id": "R-056",
+    "name": "Printable order packing slips",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "domain/print-batches.ts (buildOrderPackingSlip + renderArtifactPdf) + app/api/admin/print-artifacts/[artifactId]/route.ts: live packing-slip PDF linked directly from the order-detail page header for finalized orders."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "app/api/admin/orders/[id]/packing-slip/route.ts is a deprecated shim that redirects into lib/ops/print-batch.ts, a genuinely more built-out print-batch engine (idempotent fingerprints, nightly batches, reprint-by-group/order) surfaced via components/admin/print-batches.tsx — but that UI is a separate ops screen, not a direct link on the order-detail page itself."},
+      "arm-04": {"score": 7, "flags": [], "note": "components/admin/order-print-links.tsx gives direct, simple print links (slip/label/card) right on the package-detail page — present and wired, but a thinner feature than arm-01/03's batch-oriented engines (no nightly batch/reprint tracking visible at this layer)."},
+      "arm-05": {"score": 7, "flags": [], "note": "Real PDF generation (createPdf/orderPackingSlipDocument) with per-package 'Packing slip' links AND a nightly batch-print workflow with reprint tracking on the packages page — actually more built-out as a batch feature than arm-01, but the individual order-detail page itself doesn't link it (only the packages board does)."},
+      "arm-06": {"score": 8, "flags": [], "note": "PDF rendering via lib/print/pdf.ts, referenced from the order-packages-card; consistent with the cluster's approach."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/admin/print-artifacts/[artifactId]/route.ts; domain/print-batches.ts", "arm-05": "app/api/admin/print/route.ts; app/admin/packages/page.tsx", "arm-06": "lib/print/pdf.ts"}
+  },
+  {
+    "id": "R-057",
+    "name": "Staff single-order repeat workflow",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/api/admin/orders/[orderId]/repeat + repeat/page.tsx: dedicated review page resolving replacement chains before landing in POS with the customer preselected; orders:manage-gated."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": [], "note": "app/(admin)/admin/orders/[id]/repeat + lib/ops/repeat.ts: a real dedicated review page with line/recipient preview before creating the draft, matching arm-01's shape — gated on the broad 'admin.access' rather than a manage-specific permission."},
+      "arm-04": {"score": 7, "flags": [], "note": "lib/orders/repeat-order.ts (repeatOrderAtCounter): deliberately bypasses a review step and lands directly as a draft on the till, with real conflict detection (till-busy) and replacement-chain resolution — a legitimate but different design choice that trades the reviewable confirmation step (present in arm-01/03/06) for speed."},
+      "arm-05": {"score": 5, "flags": [], "note": "Real backend (createRepeatDraft, /api/repeat) exists and is reachable from the Seasons page, but the trigger UI requires manually pasting a sourceOrderId/targetSeasonId rather than a real per-order 'Repeat' action on the order or customer page — functional but not integrated where a staffer would naturally look."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated /admin/orders/[id]/repeat review page: replacement-chain resolution, recipient confirmation step, lands as a draft on the customer's account — the most complete, reviewable repeat flow of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(admin)/admin/orders/[orderId]/repeat/page.tsx", "arm-05": "app/admin/seasons/page.tsx; app/api/admin/repeat/route.ts", "arm-06": "app/(admin)/admin/orders/[orderId]/repeat/page.tsx; lib/repeat/plan.ts"}
+  },
+  {
+    "id": "R-058",
+    "name": "Bulk repeat of customer history",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "components/admin-order-actions.tsx#BulkRepeatButton on the ORDERS list (not the customers page): selects FINALIZED orders on the current page, does a review-then-confirm round-trip against /api/admin/orders/bulk-repeat with per-row conflict reporting — a real bulk-repeat mechanism, but scoped to order selection rather than a customer/season picker as the requirement implies."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "components/admin/orders-list.tsx + app/api/admin/orders/bulk/route.ts (bulkRepeatOrders in lib/ops/repeat.ts): the same order-list-scoped bulk-repeat pattern as arm-01, with confirmReplacements/confirmRecipients flags — real, but likewise not a customer-directory/season-picker workflow."},
+      "arm-04": {"score": 9, "flags": [], "note": "Dedicated bulkRepeatHistoryAction on the customers page (app/(admin)/admin/customers/page.tsx) backed by lib/orders/bulk-actions.ts#bulkRepeatCustomerHistory: ticks customers, repeats each one's latest order from an earlier season into a till draft, per-customer outcome/conflict reporting, bounded/deduplicated — the closest match to the requirement's actual shape of the three."},
+      "arm-05": {"score": 5, "flags": [], "note": "Real bulk backend (concurrency-capped Promise.allSettled batches, per-customer outcome/error reporting, audit rows) but the UI is a raw comma-separated customer-ID textarea on the Seasons page — no customer picker, no search, crude UX compared to the other two."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated /admin/repeat-bulk page with a season picker and a candidate-row picker (listBulkHistoryCandidates), idempotent re-runs (already-repeated rows skipped), replacement-chain resolution reported per row."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "app/(admin)/admin/customers/page.tsx; lib/orders/bulk-actions.ts#bulkRepeatCustomerHistory", "arm-05": "app/admin/seasons/page.tsx; app/api/admin/repeat/route.ts", "arm-06": "app/(admin)/admin/repeat-bulk/page.tsx; lib/repeat/bulk-history.ts"}
+  },
+  {
+    "id": "R-059",
+    "name": "Staff point of sale",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Full POS shell: customer step, multi-line cart via the same builder catalog as the storefront, draft persistence, deep-linkable from repeat, orders.manage-gated."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "components/admin/pos-page-client.tsx: shared OrderBuilderShell cart, customer panel for lookup/create, gated admin.access. Requires adding a product before the customer panel becomes usable — a minor sequencing quirk, but the cart/checkout depth matches the arm-01/04/06 cluster."},
+      "arm-04": {"score": 9, "flags": [], "note": "PosShell: customer search/find-or-create step then the shared order-builder cart for multi-line/add-on orders, cash/check only (card explicitly blocked server-side), payments.manage-gated."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "'POS' is a single form: one product dropdown, one quantity field, first/last/email text inputs, cash/check select. No cart (can't sell 2 different items in one order), no add-ons, no multi-recipient support, reuses the checkout pricing path but the counter experience itself is a toy compared to a real register."},
+      "arm-06": {"score": 9, "flags": [], "note": "PosShell: customer search/find-or-create step then the shared order-builder cart for multi-line/add-on orders, cash/check only (card explicitly blocked server-side), payments.manage-gated."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(admin)/admin/pos/page.tsx; components/admin/pos-client.tsx", "arm-05": "app/admin/pos/page.tsx", "arm-06": "app/(admin)/admin/pos/pos-shell.tsx"}
+  },
+  {
+    "id": "R-060",
+    "name": "POS customer lookup + preselection + find-or-create",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "CustomerPicker: name/email/phone search against /api/admin/customers, inline create-and-start-order form, plus deep-link preselection from staff-repeat (?customerId=)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": [], "note": "pos-page-client.tsx customer panel: search-existing + create-new, real find-or-create flow — but only becomes available after a product line has been added to the cart, a workflow ordering gap vs. arm-01/04/06 where customer selection comes first."},
+      "arm-04": {"score": 9, "flags": [], "note": "Debounced directory search with cancel-stale-request handling, inline find-or-create form when no hits, matches the arm-01 cluster's completeness."},
+      "arm-05": {"score": 2, "flags": ["STUB", "MISSING"], "note": "No lookup at all — the POS form just takes first/last/email as free text and blindly upserts by email (customer.upsert) on submit. No search-existing UI, no preselection, no 'is this the right person' confirmation step."},
+      "arm-06": {"score": 9, "flags": [], "note": "Debounced directory search with cancel-stale-request handling, inline find-or-create form when no hits, matches the arm-01 cluster's completeness."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/admin/pos-customer-picker.tsx", "arm-05": "lib/admin-operations.ts#createWalkInPosOrder", "arm-06": "app/(admin)/admin/pos/pos-shell.tsx"}
+  },
+  {
+    "id": "R-061",
+    "name": "POS checkout",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Converts the POS draft through the same createOrderFromCart path as web checkout (price/stock/conflict re-derivation), finalizes and posts the audited cash/check payment inside one transaction so a stock conflict rolls the payment back too. Stripe explicitly excluded from POS."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": [], "note": "app/api/checkout/offline/route.ts (prepareCheckout + postOfflinePayment): real submit+finalize+post-payment flow reusing the shared checkout path — solid, but gated only on the broad 'admin.access' permission rather than a payments/orders-manage-specific one."},
+      "arm-04": {"score": 9, "flags": [], "note": "app/(admin)/admin/pos/[customerId]/checkout/page.tsx: conflict detection, recipient assignment, delivery validation, atomic payment posting, orders.manage-gated."},
+      "arm-05": {"score": 5, "flags": [], "note": "createWalkInPosOrder does share checkout's createPosOrder path and posts a real cash/check payment, but it is single-line-item only (one product × one quantity) — a real, if severely narrowed, checkout."},
+      "arm-06": {"score": 9, "flags": [], "note": "checkoutPosOrder: submit + finalize + post payment in one call, card explicitly rejected (422) with a clear message, conflict/in-flight-session errors mapped to 409."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/admin/pos/orders/[orderId]/checkout/route.ts", "arm-05": "lib/admin-operations.ts#createWalkInPosOrder", "arm-06": "app/api/admin/pos/checkout/route.ts; lib/payments/pos.ts"}
+  },
+  {
+    "id": "R-062",
+    "name": "Customer directory + search + add",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Dedicated /admin/customers page: name/email/phone search, pagination, order/address counts, plus 'add' via the POS find-or-create form and its backing /api/admin/customers POST (with audit on new-customer creation)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "components/admin/customers-list.tsx: real client-side search + pagination, but no bulk actions of any kind and, like the orders list, state lives client-side rather than in the URL — not bookmarkable."},
+      "arm-04": {"score": 9, "flags": [], "note": "app/(admin)/admin/customers/page.tsx: dedicated page with search, pagination, order counts, links to detail pages, a direct link into POS, AND bulk-repeat-history actions right on the directory — more complete than the arm-01/06 pattern which splits 'add' out to POS."},
+      "arm-05": {"score": 3, "flags": ["STUB", "MISSING"], "note": "No dedicated /admin/customers route exists — the 'directory' is a read-only list embedded in the Operations page (name/email/order-count, no links, no detail navigation). No /api/admin/customers routes exist at all; the only way to create a customer is the blind POS upsert or CSV import."},
+      "arm-06": {"score": 8, "flags": [], "note": "Dedicated /admin/customers page: search, pagination, order counts, links to detail pages; 'add' happens through the POS find-or-create flow, matching the arm-01 cluster's pattern."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {"arm-04": "app/(admin)/admin/customers/page.tsx; lib/orders/bulk-actions.ts", "arm-05": "app/admin/operations/page.tsx", "arm-06": "app/(admin)/admin/customers/page.tsx"}
+  },
+  {
+    "id": "R-063",
+    "name": "CSV customer/product import (staged atomic)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Dedicated /admin/import page: stage → review-every-row → all-or-nothing commit, duplicates skipped and reported, every commit audited; plus a separate legacy-migration pipeline with stage tracking and an address-review queue."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "app/api/admin/imports: real staged/atomic commit ($transaction with per-row validation, commit gated to the staging actor), but the entry point is a raw CSV textarea with no dedicated preview grid/UI."},
+      "arm-04": {"score": 8, "flags": [], "note": "Dedicated /admin/imports flow: file upload, a preview page per batch (import-preview.tsx) before commit, matching the arm-01 cluster's staged-review pattern."},
+      "arm-05": {"score": 6, "flags": [], "note": "Real staged/atomic import (stageImport writes a batch row + validation errors, commitImport runs one $transaction that errors out on any remaining invalid row and requires the staging actor to commit), but it's a raw CSV textarea buried in the Operations page with no dedicated import UI/preview grid."},
+      "arm-06": {"score": 8, "flags": [], "note": "Dedicated /admin/imports flow: file upload, a preview page per batch (import-preview.tsx) before commit, matching the arm-01 cluster's staged-review pattern."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(admin)/admin/imports/page.tsx", "arm-05": "lib/admin-operations.ts#stageImport,#commitImport", "arm-06": "app/(admin)/admin/imports/page.tsx; [batchId]/import-preview.tsx"}
+  },
+  {
+    "id": "R-064",
+    "name": "Customer detail + history",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Full customer detail page: order history table (season/placed/lines/total/status/payment, linked to order detail) + address book with last-greeting notes."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "components/admin/customer-detail.tsx: order history + address book display, functionally solid but read-only (no inline address/detail editing visible on this page)."},
+      "arm-04": {"score": 8, "flags": [], "note": "Customer detail page with order history and an inline, permission-gated (customers.manage) editable address book/customer-editor component — on par with the arm-01 cluster, with editing as a slight edge."},
+      "arm-05": {"score": 0, "flags": ["MISSING"], "note": "No customer detail route exists anywhere in the app (no /admin/customers/[id], no equivalent). The flat operations-page customer list has no click-through at all — there is no way to view one customer's order history in the admin UI."},
+      "arm-06": {"score": 8, "flags": [], "note": "Customer detail page with order history and an inline customer-editor + book-cleanup component; on par with the arm-01 cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-04",
+    "evidence": {"arm-01": "app/(admin)/admin/customers/[customerId]/page.tsx", "arm-04": "app/(admin)/admin/customers/[customerId]/page.tsx", "arm-05": "MISSING"}
+  },
+  {
+    "id": "R-065",
+    "name": "Product catalog management (list/create/edit/detail/season)",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "components/catalog-manager.tsx: create form + genuine inline edit (name and price via onBlur PATCH) + hide/publish + archive + a replacement-link dropdown — real, but SKU/description/image are not editable after creation, and there is no dedicated product detail page."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "components/admin/catalog-admin.tsx: a real single-page CRUD form covering SKU/slug/name/category/description/price/onHand/replacement-targets (comma-separated product IDs — crude but functional), plus delete. Broader field coverage than arm-01, but no dedicated detail page and the replacement-target UX is a raw text field."},
+      "arm-04": {"score": 8, "flags": [], "note": "Season-scoped list page + a real dedicated /admin/catalog/[productId] detail/edit page, needs-photos card, links to dedicated add-on/replacement pages — most complete of the three, matching arm-06's approach."},
+      "arm-05": {"score": 5, "flags": [], "note": "Single-page CRUD: real inline edit form for name/sku/price/kind/photo/active/add-on-restrictions (better field coverage than arm-01's UI), but no dedicated detail page, and the 'Replacement links' section is an admitted, explicitly disabled placeholder ('Use this shell to identify... before that workflow opens') — literal UI theater for a real requirement."},
+      "arm-06": {"score": 8, "flags": [], "note": "Season-scoped list page + a real dedicated /admin/products/[id] detail/edit page: full ProductForm, options/pricing manager, replacement-chain preview (shows where a repeat would resolve), photo assignment section. Most complete of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-03": "components/admin/catalog-admin.tsx", "arm-04": "app/(admin)/admin/catalog/[productId]/page.tsx", "arm-06": "app/(admin)/admin/products/[id]/page.tsx; product-form.tsx"}
+  },
+  {
+    "id": "R-066",
+    "name": "Add-on catalog management",
+    "scores": {
+      "arm-01": {"score": 5, "flags": [], "note": "Add-ons are created/edited in the same components/catalog-manager.tsx form as products (kind=ADD_ON): create + inline name/price edit + hide/archive, but no per-product restriction UI at all — grep for ProductAddOnAllow/restrictedTo finds nothing in the admin tree."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "components/admin/addon-admin.tsx: a dedicated add-on CRUD page (SKU/name/price/onHand/isRestricted + delete), but 'isRestricted' is only a boolean flag — there is no UI to pick which specific products an add-on is restricted to (the real ProductAddOnAllow-style join is not editable here)."},
+      "arm-04": {"score": 9, "flags": [], "note": "Dedicated /admin/catalog/add-ons page with a real per-product restriction editor (checkbox list of products in AddOnForm's restrictedToProductIds, saved via saveAddOnAction) plus full post-create edit (name/price/slug/active/tracks-inventory) via an inline details/summary — the most complete add-on management of the three, including the restriction UI the others lack."},
+      "arm-05": {"score": 5, "flags": [], "note": "Add-ons are just Products with kind=ADD_ON in the same combined catalog form — same real inline-edit capability as products (name/price/photo/active), but no add-on-specific UX (e.g. restriction editing is folded awkwardly into the product form's 'restricted add-ons' multiselect)."},
+      "arm-06": {"score": 6, "flags": [], "note": "Dedicated /admin/addons page with its own AddonManager: create + activate/deactivate + usage count ('N products'); like arm-01, no post-create name/price edit — same-tier gap."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {"arm-04": "app/(admin)/admin/catalog/add-ons/page.tsx; add-on-form.tsx", "arm-03": "components/admin/addon-admin.tsx", "arm-06": "app/(admin)/admin/addons/addon-manager.tsx"}
+  },
+  {
+    "id": "R-067",
+    "name": "Media library + photo assignment (Vercel Blob)",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "app/(admin)/admin/media/page.tsx + app/api/admin/media/route.ts (POST-only): real dedicated page with upload + assign-to-product + needs-photos list, but the API is Blob-only — with no BLOB_READ_WRITE_TOKEN it 503s ('Media storage is not configured') rather than falling back to local disk, and there is no delete/DELETE route at all."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "components/admin/media-admin.tsx + app/api/admin/media/route.ts: dedicated page, upload with a genuine local-disk fallback when no Blob token is set, link-to-product assignment, needs-photos list — no DELETE endpoint exists, so nothing can be removed once uploaded."},
+      "arm-04": {"score": 8, "flags": [], "note": "lib/media/storage.ts implements a clean storage-driver abstraction (env.MEDIA_STORAGE selects Blob vs. local disk with path-traversal protection); lib/media/validation.ts does real magic-byte sniffing + extension/content-type cross-check + mandatory alt text. Dedicated /admin/media page with needs-photos card; assignment happens from the product page. No delete endpoint either, but the cleanest architecture of the three."},
+      "arm-05": {"score": 4, "flags": [], "note": "Upload widget embedded in the catalog page (not a dedicated library), real magic-byte validation, but no local-disk fallback (503s without BLOB_READ_WRITE_TOKEN) and no delete endpoint at all — uploaded assets can never be removed. Assignment works via the product form's photo dropdown."},
+      "arm-06": {"score": 8, "flags": [], "note": "Dedicated /admin/media page: shows active storage driver (Blob vs. local .uploads with a nudge to configure Blob), 'needs photos' product list, assignment and delete via MediaManager. On par with arm-01."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "lib/media/storage.ts; lib/media/validation.ts; app/(admin)/admin/media/page.tsx", "arm-05": "app/api/admin/media/route.ts (POST only)", "arm-06": "app/(admin)/admin/media/page.tsx; media-manager.tsx"}
+  },
+  {
+    "id": "R-068",
+    "name": "Inventory overview dashboard",
+    "scores": {
+      "arm-01": {"score": 1, "flags": ["MISSING"], "note": "No admin page or component anywhere references InventoryItem/onHand for display — grep across the whole app/ tree returns zero admin-UI hits. There is no season-goal/sold/produced/remaining view of any kind."},
+      "arm-02": {"score": 1, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01 — same absence."},
+      "arm-03": {"score": 1, "flags": ["MISSING"], "note": "onHand appears only as a plain numeric field inside the product/add-on create-edit forms (catalog-admin.tsx, addon-admin.tsx) and the raw list rows ('on hand 12') — there is no dedicated overview page, no season-goal/sold/remaining rollup, independently verified absent."},
+      "arm-04": {"score": 1, "flags": ["MISSING"], "note": "The catalog list page shows a per-row 'N available' figure (onHand − reserved) but there is no dedicated inventory dashboard anywhere — no season totals, no sold/produced/remaining view, independently verified absent."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "Same absence, independently verified — quantityOnHand/quantityReserved are read only inside storefront availability logic (order-builder.tsx, catalog-grid.tsx), never surfaced in any admin view."},
+      "arm-06": {"score": 1, "flags": ["MISSING"], "note": "Same absence in the independent codebase too — onHand/InventoryItem have zero references anywhere under app/, despite the field existing in the schema and being used by the reserve/commit engine."}
+    },
+    "winner": "none",
+    "runner_up": "none",
+    "evidence": {"arm-01": "MISSING (grep: 0 admin-UI hits for InventoryItem/onHand)", "arm-04": "MISSING (only a per-row 'available' figure on the catalog list; no dashboard)", "arm-06": "MISSING (lib/inventory/reserve.ts has no dashboard consumer)"}
+  },
+  {
+    "id": "R-069",
+    "name": "Production batch planning + history",
+    "scores": {
+      "arm-01": {"score": 0, "flags": ["MISSING"], "note": "No ProductionBatch (or equivalent) model, route, or UI anywhere in schema.prisma or the app tree. onHand is set once (or never) and there is no mechanism to record received/produced stock, so the reserve engine's ceiling can never move."},
+      "arm-02": {"score": 0, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01 — same absence."},
+      "arm-03": {"score": 0, "flags": ["MISSING"], "note": "No production/batch model exists in schema.prisma — grep for ProductionBatch/WriteOff finds nothing; onHand is only ever set directly through the catalog admin form, independently verified absent."},
+      "arm-04": {"score": 0, "flags": ["MISSING"], "note": "No production-batch model across any of the split schema/*.prisma files (catalog.prisma, reporting.prisma, etc.) — independently verified absent."},
+      "arm-05": {"score": 0, "flags": ["MISSING"], "note": "No batch/production model or route found anywhere in prisma/schema.prisma or lib/ — the (unrelated) print-batches.ts is nightly print artifacts, not stock production."},
+      "arm-06": {"score": 0, "flags": ["MISSING"], "note": "Same absence — no production-batch concept exists in this independent codebase either."}
+    },
+    "winner": "none",
+    "runner_up": "none",
+    "evidence": {"arm-01": "MISSING (no ProductionBatch model/route/UI in schema, lib, or app)", "arm-05": "MISSING", "arm-06": "MISSING"}
+  },
+  {
+    "id": "R-070",
+    "name": "Inventory adjustments + write-offs + shortfall",
+    "scores": {
+      "arm-01": {"score": 0, "flags": ["MISSING"], "note": "No adjustment/write-off model, API, or UI anywhere; staff cannot correct a stock count or record damaged/lost units through the app at all."},
+      "arm-02": {"score": 0, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01 — same absence."},
+      "arm-03": {"score": 0, "flags": ["MISSING"], "note": "The only 'Adjustment' model in schema.prisma is PaymentReconcileAdjustment (payment reconciliation), unrelated to stock — no inventory write-off/adjustment concept exists, independently verified absent."},
+      "arm-04": {"score": 0, "flags": ["MISSING"], "note": "No write-off/adjustment model in any schema/*.prisma file and no corresponding route or admin UI — independently verified absent."},
+      "arm-05": {"score": 0, "flags": ["MISSING"], "note": "No adjustment/write-off concept found anywhere in schema, lib, or app."},
+      "arm-06": {"score": 0, "flags": ["MISSING"], "note": "Same absence in this independent codebase — no write-off/adjustment path exists."}
+    },
+    "winner": "none",
+    "runner_up": "none",
+    "evidence": {"arm-01": "MISSING", "arm-05": "MISSING", "arm-06": "MISSING"}
+  },
+  {
+    "id": "R-071",
+    "name": "Stock reserve/allocate/release engine",
+    "scores": {
+      "arm-01": {"score": 5, "flags": ["BROKEN"], "note": "domain/inventory.ts contains ONLY reserveInventory — a correct single conditional UPDATE (WHERE onHand-reserved >= qty), race-safe. There is no release function anywhere in the codebase, not even as dead code (grep for 'release'/'Release' across domain/ and app/ returns nothing) — reserved only ever grows, and onHand is never decremented, so this is a pure one-way allocator, weaker than previously credited."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "lib/inventory/reserve.ts: the same correct conditional-UPDATE reserve, plus a genuine audit-trail row (AuditAction.INVENTORY_RESERVED) and a target-xor validator ensuring a row is exactly product-XOR-add-on — a real quality/correctness edge over arm-01. Still no release or commit function anywhere in lib/."},
+      "arm-04": {"score": 7, "flags": [], "note": "lib/inventory/reserve.ts: reserveUnits AND releaseUnits are both real conditional-UPDATE row-locking operations, and releaseUnits is genuinely wired into lib/orders/order-service.ts's cancellation/hold-release path — a real, exercised reserve→release cycle, better than arm-01/03. Still no commit step that decrements onHand, so stock is never truly consumed."},
+      "arm-05": {"score": 4, "flags": ["BROKEN"], "note": "reserveInventory is a correct conditional UPDATE + writes an audit-trail InventoryReservation row (a nice touch arm-01 lacks), invoked at Stripe-webhook-confirm time. But there is zero 'release' logic anywhere in lib/ (grep for 'release' case-insensitive returns nothing) and zero 'commit' step either — reserved only ever grows, onHand only ever holds constant. Worse than arm-01: no release function even exists as dead code."},
+      "arm-06": {"score": 8, "flags": [], "note": "Full three-stage engine — reserveStockTx/releaseStockTx/commitStockTx, all using SELECT...FOR UPDATE row locks, and all three are genuinely wired into the checkout lifecycle (submit reserves, finalize commits — decrementing onHand for real, releaseOrderReservation frees stock on cancellation). The only one of the three with a working end-to-end reserve→consume→release cycle."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "lib/inventory/reserve.ts; lib/orders/order-service.ts", "arm-05": "lib/inventory.ts (no release/commit)", "arm-06": "lib/inventory/reserve.ts; lib/checkout/reservations.ts"}
+  }
+]

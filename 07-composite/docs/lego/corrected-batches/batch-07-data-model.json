@@ -1,0 +1,1315 @@
+[
+  {
+    "id": "R-137",
+    "name": "Normalized relational app schema (Postgres/Prisma)",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase (1068-line single schema.prisma): cuid PKs, real FKs, sensible indexes. But Product merges PACKAGE/ADD_ON/DONATION into one model via ProductKind rather than a separate AddOn entity -- a god-model merge of two catalog concepts, same criticism the old (wrong) grading gave arm-05."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical schema.prisma to arm-01 (confirmed diff -q)."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase (1366-line schema.prisma): Product and AddOn are separate first-class models, ProductReplacement is an explicit join model with a note field, RecipientGreetingMemory for greeting continuity. Solid, independently-designed normalization."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: modular 16-file schema (~1920 lines total: catalog/orders/customers/inventory/fulfillment/imports/identity/ops/migration/reporting/routes/printing/media/notifications/email/newsletter.prisma), uuid PKs. Exceptionally documented -- nearly every field/relation has an inline comment explaining the design rationale and citing the requirement id it satisfies. Reservation is a dedicated audit-trail entity, not just a counter."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "838-line reduced schema. Uses Decimal(8,2) for dims/weight (arguably more correct than clone's Float) and adds a PackageLine join table between Package/OrderLine. Loses several supporting tables (no legacy-import entity, no ConcurrencyFixture, no dedicated CheckoutSession-to-refund plumbing depth)."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "1312-line independent schema with @@map snake_case tables, richer enum granularity, unified ImportBatch (regular+legacy), ReconciliationRun/Finding, and explicit self-referential OrderLine add-on tree. Most complete and most annotated of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "schema/catalog.prisma; schema/orders.prisma; schema/inventory.prisma (16 modular files)",
+      "arm-06": "prisma/schema.prisma:1-1313"
+    }
+  },
+  {
+    "id": "R-138",
+    "name": "DB-enforced lifecycle + category enums",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: 21 Postgres enums (StaffRole/Status, SeasonStatus, ProductKind, OrderStatus, PackageStage, PaymentMethod/Status/IntentStatus, DeliveryRouteStatus, MessageStatus, InventoryTargetKind, AssemblyBatchStatus, etc.). Gap: ImportBatch.status and LegacyImportBatch.status are plain String, not enums -- DB does not enforce their lifecycle values."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical schema."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: 24 enums, including a 60+-value AuditAction enum (most granular audit typing of any arm), plus ImportKind/ImportBatchStatus/ImportRowStatus/ReconcileStatus/CronRunStatus all as real enums (unlike arm-01's plain-string import status). Genuinely the most DB-enforced of the three true builds."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: 36 enum declarations across the modular schema files, including GeocodeOutcome, LegacyImportStatus, LegacyRowStatus (with NEEDS_MAPPING), AddressCleanupKind/Status, ReservationStatus, ShippingQuoteSource, FeeBasis, FulfillmentKind. ImportBatchStatus and LegacyImportStatus are proper enums (not strings), closing the gap arm-01 has."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "~12 enums covering the same core lifecycles (PackageStatus adds UNCLAIMED, PaymentStatus adds REFUNDED at order level) but fewer granular status enums overall (e.g. no dedicated webhook/legacy-import status enums)."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "~24 enums with finer lifecycle granularity: ImportKind/ImportStatus, CronRunStatus, ReconciliationRunStatus/FindingKind, EmailRecipientStatus, StaffStatus adds PENDING for invite flow. Most thorough enum coverage."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "schema/imports.prisma; schema/migration.prisma; schema/customers.prisma (GeocodeOutcome, LegacyRowStatus)",
+      "arm-06": "prisma/schema.prisma:10-129"
+    }
+  },
+  {
+    "id": "R-139",
+    "name": "Inventory-target integrity (XOR CHECK) constraints",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: real CHECK constraint in migration.sql (InventoryItem_target_xor_check), plus a second CHECK enforcing reserved BETWEEN 0 AND onHand, plus quantity/price CHECKs on order lines. Confirmed via grep on the actual migration SQL."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical migration SQL."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: identical-in-spirit XOR CHECK constraint in migration.sql, PLUS an app-level mirror guard (assertInventoryTargetXor in lib/inventory/target-xor.ts) that throws before ever reaching the DB. Real defense-in-depth."
+      },
+      "arm-04": {
+        "score": 10,
+        "flags": [],
+        "note": "TRUE codebase: EIGHT hand-written CHECK constraints across the schema (InventoryItem single-target + reserved-within-on-hand, Reservation single-target + quantity-positive, Order has-owner + pos-has-customer, OrderLine assignment-complete, PaymentRefund amount-positive), and migration-guard.ts verifies all eight survive migration replay by querying pg_constraint against a live shadow database in CI -- the most rigorous and most broadly-applied XOR/CHECK discipline of any true arm."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "Equivalent CHECK: ALTER TABLE InventoryItem ADD CONSTRAINT InventoryItem_exactly_one_target CHECK ((productId IS NULL) <> (productAddOnId IS NULL)). Same rigor."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Has the inventory XOR CHECK plus two more: order_lines_line_kind CHECK (product-line vs add-on-line integrity) and shipping_quotes_target_xor CHECK. Broader application of the same discipline beyond just inventory, verified by a dedicated live-DB regression test (scripts/test-constraints.mts) that INSERTs violating rows and asserts rejection."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "migration-guard.ts:20-29,87-114; migrations/20260726131500_p2_domain_core/migration.sql",
+      "arm-06": "prisma/migrations/20260728164419_domain_core/migration.sql:504; scripts/test-constraints.mts"
+    }
+  },
+  {
+    "id": "R-140",
+    "name": "Ordered migrations + schema-change guard (CI)",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: 18 chronologically-ordered migration folders, AND (contrary to the old grading's claim of no CI) a real workflows/ci.yml that spins a Postgres service container and runs `npm run db:deploy && npm run ci`. package.json is missing from the extracted tree so the exact migration-guard script logic is unverifiable, but the CI wiring itself is confirmed real."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts/migrations, same gap (no CI workflow file)."
+      },
+      "arm-03": {
+        "score": 3,
+        "flags": [
+          "STUB"
+        ],
+        "note": "TRUE codebase: 13 ordered migrations. migrate-guard.mjs exists but is pure string-pattern matching (checks the schema/migration text literally contains the substring \"InventoryItem_target_xor_check\") -- it does NOT diff schema against applied migrations and would pass even if unrelated schema drift occurred. And there is no workflows/ci.yml or .github directory anywhere in the tree, so even this weak guard is never run automatically."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: 15 ordered migrations, a real workflows/ci.yml (db:start, db:wait, env:check, lint, typecheck, db:guard, test, seed, build), and migration-guard.ts is genuinely rigorous: runs `prisma migrate diff` against a live shadow DB AND separately queries pg_constraint to confirm all 8 hand-written CHECK constraints survive migration replay. The most complete guard + CI pairing of the three true arms."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "The ONLY arm with a real .github/workflows/ci.yml wired to run lint/typecheck/migration:guard/migration:harness/test on push+PR. However its 'migration:guard' script is only `prisma validate` (schema syntax check) -- it does NOT diff schema against applied migrations, so it cannot actually detect drift. Also has two migration folders with the exact same timestamp (20260727234500_p5_checkout and 20260727234500_p8_shipping_labels), an ordering-fragility smell."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "20 ordered migrations; scripts/migration-guard.mjs explicitly (1) validates folder-name regex, (2) verifies on-disk sort order matches lexical order, (3) checks `prisma migrate status` is up to date, and (4) runs `prisma migrate diff` for real drift detection -- the most rigorous guard logic of the six. Still no .github/workflows file wiring it into actual CI."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "migration-guard.ts; workflows/ci.yml; migrations/ (15 dirs)",
+      "arm-06": "scripts/migration-guard.mjs; prisma/migrations/ (20 dirs)"
+    }
+  },
+  {
+    "id": "R-141",
+    "name": "Disposable migration verification harness",
+    "scores": {
+      "arm-01": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "TRUE codebase: no embedded-postgres or spin-up-fresh-DB harness script found anywhere in the tree. Real DB-integration tests exist (domain-core.test.ts using node:test against a live Prisma client), but nothing that deploys migrations into a disposable database and verifies the result."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts."
+      },
+      "arm-03": {
+        "score": 4,
+        "flags": [],
+        "note": "TRUE codebase: start-db.mjs spins an embedded-postgres instance, but it is a persistent local dev helper (\"Leave this process running\") meant to be started once and left up, not an automated disposable-per-run harness. smoke-p*.mjs scripts (11 of them) exercise phases against whatever DB is already running. No fresh-DB-migrate-verify-teardown pattern."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: smoke-harness.ts (144 lines) plus migration-guard.ts's shadow-database dance (drop, create, `prisma migrate deploy`, query pg_constraint, drop again) is a genuine disposable-per-run verification cycle -- creates and tears down a throwaway database every guard invocation."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Dedicated 'migration:harness' script (scripts/migration-harness.ts) that spins a fresh local embedded-postgres via runWithLocalDatabase, runs `prisma migrate deploy` then `prisma migrate status` against it -- a genuine disposable-DB migration replay, separate in concern from the (weak) guard script."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "scripts/db-start.mjs (embedded postgres) + migration-guard.mjs's migrate-status/diff checks, PLUS scripts/test-constraints.mts is a live-DB regression harness that inserts CHECK-violating rows against a real migrated database and asserts rejection -- the most substantive verification that migrations actually enforce what they claim."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "migration-guard.ts:41-114; smoke-harness.ts",
+      "arm-06": "scripts/migration-guard.mjs; scripts/test-constraints.mts"
+    }
+  },
+  {
+    "id": "R-142",
+    "name": "Repeatable baseline seed",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: 426-line seed.ts, upsert-based, calls a real domain function (ensureMessagingConfiguration) rather than pure raw inserts. Solid, if less domain-exercising than the richer arms."
+      },
+      "arm-02": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical seed.ts."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: 778-line seed.ts (largest of the three), fully upsert-based, PLUS a separate seed-scale-p6.ts for load/scale testing -- extra seeding infrastructure beyond the baseline requirement."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: seed logic split by concern across seed.ts (37), seed-identity.ts (66), seed-storefront.ts (138), seed-domain.ts (412) -- clean modular separation, all upsert-based (27+ upsert/create calls in seed-domain.ts alone)."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "200-line seed.ts, also fully upsert-based, seeds season/products/options directly via Prisma client. Slightly thinner domain coverage than clone (no full order-through-finalize exercise)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Seed logic factored into lib/testops/baseline-seed.ts (420 lines, 38 create/upsert calls) shared between `npm run seed` and the P12 test console / scale-seed script -- single source of truth for baseline data, best separation of concerns."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "seed.ts; seed-identity.ts; seed-storefront.ts; seed-domain.ts",
+      "arm-06": "prisma/seed.ts; lib/testops/baseline-seed.ts"
+    }
+  },
+  {
+    "id": "R-143",
+    "name": "Auditable staged import pipeline + atomic commits",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: a single flat LegacyImportBatch model (checkpointKey unique for resume-safety, payload/mappings/issues/sourceCounts/sourceTotals/importedCounts as Json) plus domain/legacy-import.ts using Zod validation and checkpoint keys. Real and resumable, but less structurally rich than a per-stage model (no dedicated per-entity-stage rows)."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical implementation."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: one generic ImportBatch/ImportRow pair handles CUSTOMERS, PRODUCTS, AND historical ORDERS via ImportKind, with commitCursor for resume and per-row status/errors tracked in ImportRow. lib/ops/import.ts repairs broken order numbers and creates missing customers. Reasonably complete but does not distinguish 'legacy migration' from an ordinary CSV upload as a separate concept."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: cleanly SEPARATES ordinary staged CSV import (ImportBatch/ImportRow, customers/products only) from legacy migration (LegacyImportRun/LegacyImportRow: seasonYear-scoped, chunked commits via committedChunkCount for crash-resumability, NEEDS_MAPPING verdict for ambiguous rows, source/imported total reconciliation). The most complete and most auditable staged-import design of the three true arms."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [
+          "THEATER"
+        ],
+        "note": "No dedicated import-run/stage models at all. stageImport()/commitImport() (lib/admin-operations.ts) stash a JSON blob under the generic AppSetting table keyed by a random batchId, and commit is a single flat transaction for exactly one of two kinds (customers OR products) -- no addresses/orders stage, no per-stage completion tracking, no resume-on-crash story. Real transactional atomicity on commit, but 'staged pipeline' is a thin CSV-uploader, not the multi-entity legacy migration this item describes."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Single ImportBatch model spans BOTH ordinary CSV imports and legacy migration kinds (ImportKind: CUSTOMERS/PRODUCTS/LEGACY_CUSTOMERS/LEGACY_PRODUCTS/LEGACY_ORDERS) via one staged-then-atomic engine (lib/imports/engine.ts) with per-kind handlers under lib/imports/legacy/ (customers.ts, products.ts, orders.ts, cleanup.ts, resolve-customer.ts). Explicit dryRun flag that can never commit. Most complete and most auditable of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "schema/imports.prisma; schema/migration.prisma (LegacyImportRun/Row)",
+      "arm-06": "prisma/schema.prisma:825-849; lib/imports/engine.ts; lib/imports/legacy/*"
+    }
+  },
+  {
+    "id": "R-144",
+    "name": "Customer records (normalized phone/email + dedupe)",
+    "scores": {
+      "arm-01": {
+        "score": 3,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "TRUE codebase: Customer.emailNormalized/phoneNormalized ARE unique columns, but app/api/order/drafts/route.ts's guest-draft path (line 72) ALWAYS calls db.customer.create() for a new guest with zero email/phone lookup beforehand, AND does not catch the P2002 unique-constraint error -- a guest re-entering an email already on file (e.g. retrying after a network blip) hits an unhandled 500. The dedupe promise this item describes is actively broken at the most common entry point."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "TRUE codebase: Customer.emailNorm is unique but phoneNorm is only indexed, not unique (weaker guarantee). linkOrCreateCustomer() checks clerkUserId+email but is only invoked for Clerk-authenticated users; resolveCustomerId() in lib/orders/draft-access.ts leaves anonymous guests customerless (managed purely by guest tokens). No crash risk like arm-01, but email/phone dedupe never runs for the guest population at all."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Customer.email is required+unique, normalizedEmail unique, normalizedPhone unique nullable with an explicit comment tying it to R-144. linkCustomerIdentity() catches the P2002 race (two simultaneous first-time logins) and re-reads the winning row instead of crashing -- genuinely collision-safe."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "emailNormalized + phoneNormalized both unique nullable columns; normalizeEmail/normalizePhone in lib/foundation.ts. Less documented reasoning around phone-based account-takeover risk than clone cluster."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "email unique, normalizedPhone unique; lib/imports/legacy/resolve-customer.ts implements explicit ambiguity law (email+phone pointing at different existing customers -> row invalid, human decision required) -- the most rigorous dedupe policy documentation of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/api/order/drafts/route.ts:63-80 (unhandled duplicate-create bug)",
+      "arm-04": "schema/customers.prisma:9-26; lib/customers.ts:20-46",
+      "arm-06": "prisma/schema.prisma:167-181; lib/imports/legacy/resolve-customer.ts"
+    }
+  },
+  {
+    "id": "R-145",
+    "name": "Saved addresses with geocoding fields",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: CustomerAddress latitude/longitude Decimal(9,6) nullable, geocodedAt, geocodeProvider, rememberedGreeting, validationStatus/reviewReason, version, @@unique[customerId, normalizedKey]. Solid and precise (Decimal, not Float)."
+      },
+      "arm-02": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: SavedAddress lat/lng Float, geocodeStatus, needsReview/reviewReason for the cleanup queue, and a unique mergedIntoId self-relation (AddressMerge) letting duplicate address rows be explicitly linked to a survivor -- a differentiator not seen in the other true arms."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: CustomerAddress lat/lng Float nullable, geocodedAt, lastGreeting, needsReview/reviewNote, isArchived (soft-delete so past orders' address pointers stay valid). Clean, well-commented."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Address: latitude/longitude as Decimal(9,6) (more precise than Float), reviewStatus/reviewReason for a manual cleanup queue baked directly onto the address row."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Address: lat/lng nullable, needsReview + reviewReason flags feeding a documented staff review queue (docs/LEGACY-ENTITY-MAP.md), lastGreeting memory field. Slightly richer review workflow than the other two."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "schema.prisma:538-566",
+      "arm-03": "schema.prisma:520-556 (SavedAddress mergedIntoId chain)",
+      "arm-06": "prisma/schema.prisma:351-380"
+    }
+  },
+  {
+    "id": "R-146",
+    "name": "Season model gating catalog per year",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Season.status(OPEN/CLOSED), a single scheduledStatus+scheduledStatusAt pair for auto-flip in either direction, nextOrderNumber. Product/Order/etc. all seasonId-scoped. Elegant single-field scheduling design."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Season.status, opensAt/closesAt (actual) PLUS scheduledOpenAt/scheduledCloseAt (planned) as four distinct fields, nextOrderNumber, slug unique. More verbose than arm-01's design but equally functional."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Season.status, opensAt/closesAt double as both the schedule and the record of when it happened (comment: 'null means the manager flips it by hand'), nextOrderNumber with an explicit atomic-increment comment tying it to R-151. Simple and well-reasoned."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Season.year unique + status + opensAt/closesAt + nextOrderNumber; Product is seasonId-scoped. Functionally equivalent, slightly less schema commentary/edge-case documentation."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Season.status + scheduledOpensAt/scheduledClosesAt + lastOrderSeq/lastDraftSeq (separate counters for orders vs drafts, a small improvement); Product/Order/PrintBatch/DeliveryRoute/BulkDeliverySchedule all seasonId-scoped."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "schema.prisma:324-342",
+      "arm-05": "prisma/schema.prisma:152-164",
+      "arm-06": "prisma/schema.prisma:243-260"
+    }
+  },
+  {
+    "id": "R-147",
+    "name": "Product catalog schema (dims, inventory flags, kinds)",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: Product MERGES package/add-on/donation into ONE model via ProductKind (PACKAGE/ADD_ON/DONATION) rather than a separate AddOn entity -- widthMm/heightMm/depthMm/weightGrams, tracksInventory, isFinishedPackage, replacementProductId self-relation are all real, but the two catalog concepts (sellable package vs add-on) share one table, the same 'god-model' criticism the old grading gave arm-05."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Product and AddOn are cleanly separate models; weightOz/lengthIn/widthIn/heightIn (imperial, Float), tracksInventory, isActive. ProductReplacement is a dedicated join model (fromProduct/toProduct) with an optional note field -- more auditable than a bare self-relation FK."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: Product and AddOn separate models; lengthMm/widthMm/heightMm/weightGrams (metric, Int), tracksInventory, isActive, ProductKind(PACKAGE/BUNDLE/SPONSORSHIP), replacedByProductId self-relation with an explicit, well-reasoned comment on why it is deliberately non-unique (multiple retired products folding into one survivor). Most thoughtfully designed of the three."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "Product: lengthInches/widthInches/heightInches/weightOunces as Decimal, isInventoryTracked, ProductKind (PACKAGE/ADD_ON/DONATION) -- add-ons are modeled as Product rows of kind ADD_ON rather than a separate entity, a less clean separation of concerns (a 'god-model' merge of two different catalog concepts) even though ProductAddOn still expresses the restriction relation."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Product: lengthMm/widthMm/heightMm/weightGrams, trackInventory + allowBackorder (extra useful flag), ProductKind (GOOD/BUNDLE/SERVICE), replacedById self-relation. AddOn is a separate first-class entity like clone. Most complete flag coverage."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "schema/catalog.prisma:46-142",
+      "arm-06": "prisma/schema.prisma:266-338"
+    }
+  },
+  {
+    "id": "R-148",
+    "name": "Product options with price adjustments",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: ProductOption.priceAdjustmentCents, @@unique[productId, name, value] -- flat name+value pair. OrderLine.productOptionId is a single direct FK with no per-line snapshot of the adjustment amount, so the option's price impact at write time is not independently recorded."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: ProductOption.priceAdjustmentCents, @@unique[productId, name] (flat name only). OrderLine.optionAdjustCents is a real snapshot field capturing the adjustment amount at write time without needing a separate join table."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: ProductOption.groupLabel + label + priceAdjustmentCents, @@unique[productId, groupLabel, label] -- a two-level naming scheme (option group + choice) as one flat row. OrderLine.optionsSnapshot (Json array) captures multiple options and their price impact per line at checkout."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "ProductOption.priceAdjustmentCents with an explicit name+value pair (@@unique[productId,name,value]) -- slightly more expressive (name='Presentation', value='Classic ribbon') than clone's flat name."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Two-level ProductOption -> ProductOptionValue with priceDeltaCents on the value, @@unique[optionId,label]. Cleaner normalization than a flat name+value pair (an option can have many priced values without denormalizing the option name)."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "schema/catalog.prisma:105-120; orders.prisma:129 (optionsSnapshot)",
+      "arm-06": "prisma/schema.prisma:300-321"
+    }
+  },
+  {
+    "id": "R-149",
+    "name": "Normalized order tree (Order -> OrderLine -> add-ons)",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: OrderLine -> OrderLineAddOn is a real separate table, but options travel only via a single direct productOptionId FK with no snapshot join -- the tree is less normalized for options than for add-ons."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: OrderLine -> OrderLineAddOn real table, plus OrderLine.optionAdjustCents snapshot field (no separate option-join table, but the adjustment is captured)."
+      },
+      "arm-04": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: OrderLine -> OrderLineAddOn is a real separate table; options travel as optionsSnapshot (Json array, supports multiple options per line) rather than normalized rows -- a deliberate snapshot-over-relation tradeoff since options must never change after checkout."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Order -> OrderLine -> OrderLineAddOn, plus a PackageLine join between OrderLine and Package. Missing a distinct options-join (options travel as a Json optionSnapshot on OrderLine instead of a relational row), a small step down in normalization for options specifically."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "Order -> DraftRecipient -> OrderLine, with add-ons modeled as a SELF-REFERENTIAL OrderLine row (parentLineId) rather than a separate add-on table. Clever (one CHECK enforces exactly one of productId/addOnId + add-on lines must carry parentLineId) but a real design deviation from a textbook tree -- a single table now serves two different row shapes, which is harder to reason about than clone's explicit separate tables."
+      }
+    },
+    "winner": "arm-02",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "prisma/schema.prisma:350-394 (OrderLineOption + OrderLineAddOn)",
+      "arm-04": "schema/orders.prisma:118-189 (optionsSnapshot + OrderLineAddOn)",
+      "arm-06": "prisma/schema.prisma:440-505"
+    }
+  },
+  {
+    "id": "R-150",
+    "name": "Price snapshots on order lines",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: OrderLine.productNameSnapshot, skuSnapshot, unitPriceCentsSnapshot; OrderLineAddOn.addOnNameSnapshot + unitPriceCentsSnapshot. Solid three-field snapshot, but no separate snapshot of the option's price adjustment amount."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: OrderLine.unitPriceCents + optionAdjustCents (captures the option's dollar impact) but has NO productNameSnapshot/skuSnapshot fields at all -- historical integrity for the product FK relies only on onDelete:Restrict, so a later product RENAME (not deletion) would silently change what a past order line displays."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: OrderLine.productNameSnapshot, unitPriceCents, optionsSnapshot (Json), AND a pre-computed lineTotalCents; OrderLineAddOn mirrors the same pattern (addOnNameSnapshot, unitPriceCents, lineTotalCents). The most complete snapshot coverage of the three true arms."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "OrderLine carries unitPriceCents PLUS productNameSnapshot, skuSnapshot, and a full optionSnapshot Json -- the most thorough explicit snapshot naming of the six, guarding against catalog renames as well as repricing."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "OrderLine.unitPriceCents, productName, optionLabel, optionPriceDeltaCents, lineTotalCents all snapshotted; comment explicitly states FKs exist 'to reject fabricated ids, not for live price lookups.'"
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-04": "schema/orders.prisma:118-173",
+      "arm-05": "prisma/schema.prisma:435-452",
+      "arm-06": "prisma/schema.prisma:472-505"
+    }
+  },
+  {
+    "id": "R-151",
+    "name": "Sequential order numbers per season",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: Season.nextOrderNumber incremented, @@unique[seasonId, orderNumber]. Standard single-counter pattern."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: Season.nextOrderNumber, @@unique[seasonId, orderNumber]. Same pattern as arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Season.nextOrderNumber with an explicit comment citing R-151 directly ('Finalize claims it with an atomic increment inside its transaction, so two checkouts racing for the last number cannot both read the same value'); @@unique[seasonId, orderNumber] AND a second @@unique[seasonId, importedOrderReference] to protect legacy-imported order numbers too."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Season.nextOrderNumber + @@unique[seasonId, orderNumber]. Same core guarantee, single counter."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Season.lastOrderSeq AND lastDraftSeq -- separate counters for order numbers vs draft reference numbers, avoiding cross-contamination between the two sequences. @@unique[seasonId, orderNumber] present; a dedicated claimOrderNumber() helper referenced from the legacy-import doc for the 'always re-derive, never trust imported numbers' rule (order-number repair)."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-04": "schema/orders.prisma:26-29,54,105-106",
+      "arm-06": "prisma/schema.prisma:243-260,387-438"
+    }
+  },
+  {
+    "id": "R-152",
+    "name": "Cached derived payment status on orders",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: Order.cachedPaymentStatus: CachedPaymentStatus(UNPAID/PARTIALLY_PAID/PAID/REFUNDED), separate from Payment.status: PaymentStatus(POSTED/VOIDED). Good separation, 4 values, no OVERPAID edge case."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: Order.paymentStatusCached: CachedPaymentStatus(UNPAID/PARTIAL/PAID/REFUNDED/OVERPAID) -- 5 values including the OVERPAID edge case, separate from Payment.state: PaymentState(POSTED/VOIDED). The richest order-level payment-status enum of any true arm."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Order.paymentStatus: PaymentStatus(UNPAID/PARTIALLY_PAID/PAID/OVERPAID), separate from Payment.state: PaymentState(POSTED/VOIDED). Comment explicitly names recomputeOrderPaymentStatus as the single writer of the cached field -- a documented invariant. No distinct REFUNDED order status, by design (a refund just recomputes amountPaidCents back down)."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "Order.paymentStatus and Payment.status BOTH reuse the exact same PaymentStatus enum (PENDING/POSTED/VOIDED/REFUNDED). Reusing one enum for two different concerns (an order-level aggregate cache vs an individual payment record's lifecycle) is a modeling smell -- REFUNDED/PENDING don't cleanly describe an order's aggregate state the way UNPAID/PARTIAL/PAID/COMPED do."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Order.paymentStatus: dedicated PaymentStatus enum (UNPAID/PARTIAL/PAID/OVERPAID) distinct from Payment.status (PaymentRecordStatus: POSTED/VOIDED). OVERPAID is a thoughtful edge case the other arms don't model."
+      }
+    },
+    "winner": "arm-03",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-03": "schema.prisma:185-191,572-613",
+      "arm-06": "prisma/schema.prisma:44-49,58-61,387-438"
+    }
+  },
+  {
+    "id": "R-153",
+    "name": "Fulfillment groups (multi-destination) + snapshots",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: Package.addressSnapshot is a Json blob (not individual fields) plus recipientName and groupingKey; fully immune to address-book edits, but less explicit/queryable than a field-by-field snapshot."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Package has a FULL individual-field snapshot (recipientName/addressLine1/addressLine2/city/state/postalCode/country) directly on the row; savedAddressId is only an optional back-reference. Immune to later address-book edits."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: Package has a full individual-field address snapshot with NO FK to the address book at all (pure snapshot, sourced via OrderLine at grouping time); groupingKey is a hash of the grouping inputs. Comment explicitly explains the immutability rationale. The cleanest and most complete snapshot design of the three true arms."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "Package.addressId is an FK (onDelete: SetNull) to Address rather than a full field snapshot; recipientName/recipientPhone are snapshotted but line1/city/state/zip are NOT -- if the address book row is edited or its owning customer's address deleted, a finalized package's street address silently changes or disappears. Real correctness gap vs. the other two arms' snapshot approach."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Package.recipientAddressId FK uses onDelete: Restrict specifically so 'the stored groupingKey ... can never go stale' (explicit comment) -- an alternative to full field-snapshotting that achieves the same immutability guarantee by making the address undeletable once referenced. recipientName is still snapshotted directly."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:70-146",
+      "arm-03": "schema.prisma:666-710",
+      "arm-06": "prisma/schema.prisma:507-546"
+    }
+  },
+  {
+    "id": "R-154",
+    "name": "Data-driven fulfillment methods",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: FulfillmentMethod: code/displayName/requiresAddress/isPickup/isShipping/isActive/sortOrder -- two booleans stand in for a kind discriminator; still fully data-driven for method existence."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: FulfillmentMethod: code/label/description/isActive/sortOrder ONLY -- no kind/isPickup/isShipping discriminator field at all, the least structured of the three true arms; application code must presumably switch on the code string."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: FulfillmentMethod adds kind (FulfillmentKind: SHIPPING/DELIVERY/PICKUP), baseFeeCents, AND feeBasis (FeeBasis: NONE/PER_PACKAGE/PER_DESTINATION) -- making even the FEE-CALCULATION MODEL itself data-driven, not just method existence. The most sophisticated data-driven design of any arm on this item."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "FulfillmentMethod: code/name/isActive/sortOrder, referenced by Package. Same pattern, one fewer field (no kind discriminator on the row itself)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "FulfillmentMethod adds a stages Json + terminalStage field -- even the package-stage progression per method is data-driven (e.g. PICKUP: NEW->PACKED->PICKED_UP vs DELIVERY: NEW->PRINTED->PACKED->SENT), a further step beyond the other two arms' method-level-only data-drivenness."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:1-47",
+      "arm-06": "prisma/schema.prisma:602-616"
+    }
+  },
+  {
+    "id": "R-155",
+    "name": "Shipping quotes with selectable expiring options",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: ShippingQuote is itself ONE carrier/service/amountCents row with its own expiresAt -- no parent grouping table for multiple carrier options; 'selectable options' has to be reconstructed by querying several rows for the same package."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: ShippingQuote.options is a Json blob (array of options) under one expiresAt, with selectedOptionId -- groups options under one quote/expiry, but the options are not normalized rows."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: ShippingQuote (parent: source LIVE/FALLBACK, groupingKey, expiresAt) -> ShippingQuoteOption[] (carrier/serviceCode/carrierCostCents/customerPriceCents/isSelected/isEligible), @@unique[quoteId, carrier, serviceCode] -- a real normalized parent/child pair matching the best design pattern seen across all six arms, plus an explicit LIVE-vs-FALLBACK provenance field the others lack."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "ShippingQuote is itself ONE carrier/service/amountCents row with its own expiresAt -- there's no parent 'quote' grouping multiple carrier options together; 'selectable options' has to be reconstructed by querying several ShippingQuote rows for the same package, which is a weaker structural expression of the requirement."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "ShippingQuote.options is a Json blob (array of options) under one expiresAt -- correctly groups multiple options under one quote/expiry, but the options themselves aren't normalized rows (less queryable/indexable than clone's dedicated child table)."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-02",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:227-296",
+      "arm-02": "prisma/schema.prisma:570-593",
+      "arm-06": "prisma/schema.prisma:688-700"
+    }
+  },
+  {
+    "id": "R-156",
+    "name": "Pickup locations",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: PickupLocation model (name/address:Json/instructions/isActive) AND a real Package.pickupLocationId nullable FK -- an individual pickup package's location assignment IS wired, contrary to the old grading's claim of a gap here."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: PickupLocation model exists (code/name/line1/city/state/postalCode/isActive) with full admin CRUD, but Package has NO pickupLocationId field anywhere -- same disconnected-catalog gap as the byte-identical cluster."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: PickupLocation model wired via BOTH Package.pickupLocationId AND OrderLine.pickupLocationId (nullable FKs at two levels of the tree) -- the most completely wired pickup-location design of any arm."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PickupLocation model PLUS Package.pickupLocationId (nullable FK, onDelete: SetNull) -- an individual package's pickup location assignment is actually modeled and wired, closing the gap the other five arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PickupLocation model with admin CRUD, same gap as clone cluster: no FK from Package to PickupLocation."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:49-61; orders.prisma:139; fulfillment.prisma:80",
+      "arm-01": "schema.prisma:663-691 (Package.pickupLocationId)",
+      "arm-05": "prisma/schema.prisma:468-501,692-704"
+    }
+  },
+  {
+    "id": "R-157",
+    "name": "Package types + shipment boxes",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: PackageType (innerWidthMm/innerHeightMm/innerDepthMm/maxWeightGrams) <- ShipmentBox.packageTypeId <- ShipmentBox.packageId (real FK to an actual Package row) -- a genuinely wired chain, contrary to the old grading's claim of disconnection."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: PackageType <- ShipmentBox.packageTypeId exists, but ShipmentBox has NO packageId field at all -- boxes are never tied to an actual package instance. Package.shipmentPlan (Json) is the real bin-packing snapshot used in practice, leaving the PackageType/ShipmentBox catalog fully disconnected."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: PackageType <- ShipmentBox.packageTypeId <- ShipmentBox.packageId (required FK), PLUS Package.packageTypeId itself as a direct nullable FK -- double-wired (a package references its dominant type, and each individual box references its own type). The most complete chain of any arm."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PackageType (dims + maxWeightOunces) <- ShipmentBox.packageTypeId (Restrict) <- ShipmentBox.packageId (SetNull, an assigned box on a specific package) -- an actual wired chain from box-type catalog to a real package's box assignment, closing the gap the other arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PackageType and ShipmentBox both exist as standalone catalogs; Shipment carries only a parcels Json snapshot, same disconnection as clone cluster."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-04": "schema/fulfillment.prisma:128-160,177-225",
+      "arm-01": "schema.prisma:936-964",
+      "arm-05": "prisma/schema.prisma:706-740"
+    }
+  },
+  {
+    "id": "R-158",
+    "name": "Unified inventory (products + add-ons, versioned)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: InventoryItem: nullable productId/addOnId (XOR CHECK-enforced), onHand/reserved, version Int for optimistic locking. One row-shape serves both catalog kinds."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: InventoryItem: nullable productId/addOnId (XOR CHECK), onHand/reserved, version Int, @@index([version]). Clean, equivalent to arm-01."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "TRUE codebase: InventoryItem: nullable productId/addOnId (XOR CHECK), onHand/reserved, but NO version field at all -- optimistic concurrency relies solely on updatedAt, a materially weaker guarantee than an explicit version counter. Partially offset by a dedicated Reservation model (per-order held-stock audit trail with its own XOR + quantity-positive CHECKs), which is a genuine plus for auditability."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "InventoryItem: nullable productId/productAddOnId (XOR CHECK), quantityOnHand/quantityReserved, version, plus a separate InventoryReservation child table recording individual reservations per order line -- slightly more auditable than a bare counter."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "InventoryItem: nullable productId/addOnId (XOR CHECK), onHand/reserved, version. Functionally equivalent to clone cluster."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "schema.prisma:965-978",
+      "arm-04": "schema/inventory.prisma:1-57 (no version field; Reservation model)",
+      "arm-05": "prisma/schema.prisma:742-772"
+    }
+  },
+  {
+    "id": "R-159",
+    "name": "Stripe PaymentIntent modeling",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: StripePaymentIntent merges BOTH the checkout-session id (stripeCheckoutSessionId, nullable unique) and the intent id (stripePaymentIntentId, unique) plus idempotencyKey into ONE model rather than two separate models. Real, but less normalized than a dedicated two-model design."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: StripePaymentIntent (stripePaymentIntentId unique, clientSecret, status) AND a separate StripeCheckoutSession (stripeSessionId unique, amountCents, status, url) -- two distinct, dedicated models, matching the strongest design pattern for this item."
+      },
+      "arm-04": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: StripePaymentIntent merges session id (stripeSessionId, unique) and intent id (stripeIntentId, nullable unique) into one evolving row, with an explicit comment justifying the single-row design (the session exists before the intent id arrives via webhook). Thoughtful but still one model, not two."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "StripePaymentIntent (1:1 optional link to Payment via paymentId) plus a separate CheckoutSession model (providerSessionId/providerIntentId/status/amountCents). Comparable coverage to clone cluster, provider-agnostic naming."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "StripePaymentIntent exists (intentId unique, raw Json webhook payload with an explicit PII-redaction comment) but there is NO separate checkout-session model -- Order.stripeSessionId is just a plain unique string field, less normalized/auditable than the other two arms' dedicated session tables."
+      }
+    },
+    "winner": "arm-02",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-02": "prisma/schema.prisma:532-555",
+      "arm-03": "schema.prisma:793-822 (two distinct models)",
+      "arm-04": "schema/orders.prisma:247-263"
+    }
+  },
+  {
+    "id": "R-160",
+    "name": "Payments (stripe/cash/check/comp) with posted/voided states",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: PaymentMethod(STRIPE/CASH/CHECK/COMP) x PaymentStatus(POSTED/VOIDED). Refunds are tracked via a cumulative refundedCents field on the original Payment row rather than a separate refund entity or negative-row convention."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: PaymentMethod(4) x PaymentState(POSTED/VOIDED), refundedCents cumulative field on Payment, stripeChargeId field. Same design pattern as arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: PaymentMethod(4) x PaymentState(POSTED/VOIDED), and PaymentRefund is a DEDICATED, SEPARATE model (paymentId FK, amountCents, unique reference, reason, recordedByStaffUserId) with an explicit comment on why a refund deserves its own row rather than a negative-amount trick -- 'the ledger still answers what did they pay us and what did we return separately.' The most rigorous refund design of any arm."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "PaymentMethod same 4 values, but status reuses the order-level PaymentStatus enum (PENDING/POSTED/VOIDED/REFUNDED) noted as a smell in R-152 -- REFUNDED as a distinct payment status rather than clone's negative-amount-row convention is a workable alternative but is less internally consistent with how the rest of the schema recomputes aggregates."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "PaymentMethod (STRIPE/CASH/CHECK/COMP) x PaymentRecordStatus (POSTED/VOIDED), refundRef field for the Stripe refund id, explicit comment on the 'keyless seam' (no live Stripe keys on this host) fallback behavior."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "schema/orders.prisma:191-238 (PaymentRefund dedicated model)",
+      "arm-06": "prisma/schema.prisma:51-61,635-655",
+      "arm-02": "prisma/schema.prisma:500-530"
+    }
+  },
+  {
+    "id": "R-161",
+    "name": "Key-value settings store with typed registry",
+    "scores": {
+      "arm-01": {
+        "score": 4,
+        "flags": [
+          "STUB"
+        ],
+        "note": "TRUE codebase: lib/store-settings.ts is NOT a general registry -- it is exactly two hardcoded getter/setter pairs (deliveryZips, adminSettings), each with ad-hoc manual type-checking. No Zod schema, no per-key registry, no way to add a new setting without writing a new pair of functions. Falls well short of the 'typed registry' the item describes."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: lib/settings.ts is a genuinely generic getSetting<T>/setSetting(key, value, expectedVersion) pair with real optimistic-locking (version conflict returns a Result error) -- solid architecture. But there is no runtime validation anywhere: settings-keys.ts files are plain TypeScript type aliases, not Zod schemas, so 'typed' is compile-time only and a malformed value can still be written."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: Setting{key,value:Json} with an explicit schema comment: 'Values are validated against a Zod schema per key in src/lib/settings.ts, never read as raw JSON by callers' -- a genuine per-key Zod registry as promised. Missing a version column on the Setting model itself, so there is no DB-level optimistic lock (a smaller gap than arm-01's, since runtime validation is the core of this item)."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "lib/settings.ts is an in-memory plain object (SettingMap) with get/setSetting functions that never touch the database at all -- values reset on every process restart and are completely disconnected from the real AppSetting DB table. The actual settings persistence (app/api/admin/settings/route.ts) bypasses this file entirely and does ad-hoc per-route Zod validation directly against prisma.appSetting with no shared typed registry. Two parallel, inconsistent settings systems; the 'typed registry' deliverable is dead code."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Setting{key,value:Json} table PLUS lib/settings.ts: a Zod-schema-per-key registry (settingSchemas) covering brand/shipping/delivery/pickup/payments keys with rich inline documentation of each key's real-world purpose. Equal quality to the clone cluster's registry."
+      }
+    },
+    "winner": "arm-02",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "prisma/schema.prisma:137-142; lib/settings.ts:1-60",
+      "arm-04": "schema/identity.prisma:116-122; lib/settings.ts",
+      "arm-06": "prisma/schema.prisma:228-234; lib/settings.ts:1-40"
+    }
+  },
+  {
+    "id": "R-162",
+    "name": "Geocode cache with success/failure TTLs",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [],
+        "note": "TRUE codebase: GeocodeCache schema DOES support a cached failure (nullable lat/lng + failureCode field), but domain/delivery.ts's geocodePackage() never actually writes a failure row -- it THROWS on a Mapbox miss instead of caching it. So the schema's failure-representation capability is unused in practice; only a single 30-day success TTL is ever exercised."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: GeocodeCache has an explicit success:Boolean field and DOES cache failures (not just successes), but uses the SAME 30-day TTL_MS for both outcomes -- no differentiated failure TTL. Geocoder itself is a deterministic offline stub with no live provider call."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: GeocodeCache.outcome: GeocodeOutcome(FOUND/NOT_FOUND/FAILED) with an explicit comment: 'A miss is kept for a much shorter time than a hit' -- confirmed in lib/geocode-cache.ts as GEOCODE_SUCCESS_TTL_MS (90 days) vs GEOCODE_FAILURE_TTL_MS (1 hour), read/write logic kept in separate functions. This is the only true arm that fully implements BOTH halves of the requirement, on top of a real Mapbox integration with deterministic fallback (lib/routing/geocode.ts)."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "GeocodeCache{normalizedAddress unique, latitude/longitude Decimal, provider, expiresAt}. lib/delivery.ts has the same shape: real Mapbox call + fixture fallback, 30-day success TTL, no distinct failure-TTL representation."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "GeocodeCache{addressKey unique, lat/lng, provider, fetchedAt, expiresAt}, 30-day TTL. lib/customers/geocode.ts's deriveGeoPoint is a pure hash-based deterministic function with NO live external geocoding API integration at all (explicitly documented as 'no live geocoding API is reachable from this host') -- it can never actually fail, so the failure-TTL half of this requirement is not just unimplemented but structurally moot; also the least realistic of the three geocoders."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "schema/customers.prisma:74-87; lib/geocode-cache.ts; lib/routing/geocode.ts",
+      "arm-03": "lib/address/geocode.ts:1-80",
+      "arm-01": "schema.prisma:980-993; domain/delivery.ts:52-121"
+    }
+  },
+  {
+    "id": "R-163",
+    "name": "Cron/job run log",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: CronRun{jobName, runKey unique, status:String, startedAt/finishedAt, claimed/succeeded/failed counts, errorSummary}, indexed [jobName,startedAt]. runKey unique gives natural per-run idempotency, though status is a plain String rather than an enum."
+      },
+      "arm-02": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: TWO models -- CronRunLog{jobName,status:CronRunStatus enum,startedAt,finishedAt,message,meta} for the record, AND a separate CronJobRun{jobKey,claimedToken unique,startedAt,finishedAt,ok} model backing real overlap-prevention logic in lib/cron/runs.ts (beginCronRun/finishCronRun with stale-inflight reaping so a crashed sweep does not permanently jam the slot). The dual-model duplication is a minor cleanliness ding, but the operational safety behavior is genuinely the most sophisticated of the three true arms."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [],
+        "note": "TRUE codebase: single clean CronRunLog{jobName,status:CronRunStatus enum(RUNNING/SUCCEEDED/FAILED),startedAt,finishedAt,itemsProcessed,detail:Json}, wrapped by a centralized runCronJobBody() helper (lib/cron/job-run.ts) that every cron route calls, guaranteeing consistent success/failure logging without per-route boilerplate."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "CronRunLog{jobName, startedAt, completedAt, outcome, details:Json}, indexed [jobName,startedAt]. Equivalent shape, lib/cron-auth.ts wires it."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "CronRun{name, status(enum RUNNING/OK/FAILED), startedAt, finishedAt, message}, indexed [name,startedAt]. Uses a real enum for status (small edge over the free-text status field in the other two arms) and is exercised across the broadest set of P9-P12 cron scripts of the six."
+      }
+    },
+    "winner": "arm-03",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-03": "schema.prisma:964-974,1337-1348; lib/cron/runs.ts",
+      "arm-04": "schema/ops.prisma:1-19; lib/cron/job-run.ts",
+      "arm-06": "prisma/schema.prisma:851-862"
+    }
+  },
+  {
+    "id": "R-164",
+    "name": "Data-layer helper libraries (money/normalize/phone/ids/season/dates/result)",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [],
+        "note": "TRUE codebase: real per-concern files exist (lib/ids.ts, lib/currency.ts, lib/normalize.ts, lib/permissions.ts) rather than one god-file, but there is no dedicated dates.ts or season.ts (season logic lives in domain/seasons.ts instead) and no Result<T,E> pattern anywhere -- errors are thrown, not returned."
+      },
+      "arm-02": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Verified via `diff -rq lib/` against arm-01: fully identical lib/ tree (arm-02 has zero differing files at all)."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [],
+        "note": "TRUE codebase: lib/normalize.ts, lib/phone.ts, lib/result.ts (a real Result<T,E> pattern), lib/audit.ts, lib/constants.ts, lib/seasons/manage.ts -- genuinely separated by concern, and the only one of the three true arms with a Result-type error-handling convention. No dedicated money.ts (currency logic appears inline) or dates.ts."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "TRUE codebase: lib/core/{dates,prisma,addresses,db-client,errors,timezone,result,normalize,season,money,units,phone}.ts -- every named concern in this item gets its own dedicated small file under one well-organized directory, PLUS a real Result<T,E> pattern (lib/core/result.ts). The cleanest and most complete helper-library organization of any arm."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "lib/foundation.ts consolidates formatMoney/centsToDollars, normalizeEmail/normalizePhone/normalizeAddress, and createPublicId into ONE file -- a 'god-util' module that covers most named concerns but with no separation by concern, no dedicated season.ts/dates.ts, and no Result type (maskError() is a thin error-message helper, not a Result pattern)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Genuinely separated dedicated files: lib/money.ts, lib/phone.ts, lib/dates.ts, lib/seasons/, lib/imports/legacy/normalize.ts. lib/errors.ts defines typed NotFoundError/DomainRuleError classes as the project's one error-handling convention (a reasonable substitute for a formal Result<T,E> type, explicitly documented as 'one error-handling approach per project'). Clearly the cleanest and most consolidated of the six, though it stops short of a literal Result<T,E> generic type."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "lib/core/dates.ts; lib/core/money.ts; lib/core/phone.ts; lib/core/result.ts; lib/core/normalize.ts",
+      "arm-06": "lib/money.ts; lib/phone.ts; lib/dates.ts; lib/errors.ts; lib/seasons/",
+      "arm-03": "lib/result.ts; lib/phone.ts; lib/normalize.ts"
+    }
+  },
+  {
+    "id": "R-165",
+    "name": "Legacy\u2192new data migration plan (documented entity map)",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [],
+        "note": "TRUE codebase: LEGACY-ENTITY-MAP.md is a real but brief 20-line table. domain/legacy-import.ts is working code with Zod validation and checkpoint resumability, but none of arm-01's three test files (shipping/permissions/domain-core) specifically exercise the legacy-import logic -- no dedicated test coverage for this slice was found."
+      },
+      "arm-02": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 4,
+        "flags": [],
+        "note": "TRUE codebase: LEGACY-ENTITY-MAP.md is only 11 lines, the thinnest of the three. lib/ops/import.ts does handle CSV parsing/order-number repair, but historical orders share the same generic ImportBatch/ImportRow model as ordinary customer/product imports rather than a distinctly-modeled legacy migration system."
+      },
+      "arm-04": {
+        "score": 10,
+        "flags": [],
+        "note": "TRUE codebase: LEGACY-ENTITY-MAP.md is 102 lines -- five to nine times longer than the other two true arms -- with field-by-field mapping tables, reading rules, and a NEEDS_MAPPING verdict for ambiguous rows. Backed by a genuinely dedicated LegacyImportRun/LegacyImportRow model system (chunked commits, source/imported total reconciliation, AddressCleanupFlag for dedupe findings) that is architecturally separate from the ordinary CSV importer. The closest any arm comes to treating this item as a literal, standalone deliverable."
+      },
+      "arm-05": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No legacy-system migration concept at all beyond a generic 'upload a customers or products CSV' staged importer (see R-143). There is no entity map, documented or otherwise, from an old ordering system's schema to this one -- searched the full tree (grep -in \"legacy\") and found nothing beyond a decision-log line about the 'imports.manage' permission name."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "docs/LEGACY-ENTITY-MAP.md: a genuine standalone document with field-by-field mapping tables for Seasons, Customers (incl. merge/ambiguity rules), Products (incl. slug-dedupe policy), and Orders (incl. order-number repair, refunded-order net-zero handling, and unknown-product stub-and-review flow), cross-referenced to the actual code (lib/imports/legacy/*). This is the only arm that treats 'documented entity map' as a literal deliverable rather than implicit in code comments."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "LEGACY-ENTITY-MAP.md:1-102; schema/migration.prisma",
+      "arm-06": "docs/LEGACY-ENTITY-MAP.md:1-85",
+      "arm-01": "LEGACY-ENTITY-MAP.md:1-20; domain/legacy-import.ts"
+    }
+  }
+]

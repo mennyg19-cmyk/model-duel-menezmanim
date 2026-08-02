@@ -1,0 +1,452 @@
+[
+  {
+    "id": "R-107",
+    "name": "Clerk identity integration + middleware",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "middleware.ts switches between clerkMiddleware() (AUTH_MODE=clerk) and a dev cookie-presence gate; StaffUser/Customer.clerkUserId columns exist for identity linking. But no ClerkProvider anywhere in app/layout.tsx and no Clerk UI mounted -- Clerk mode is a documented, unexercised swap-point (DECISION-P4-2: 'no keys in harness'), not a working integration. Dev-mode middleware itself is solid."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "middleware.ts identical to arm-02 (verified via diff -- only BOM/newline noise elsewhere in this batch's touched files, no functional change here)."},
+      "arm-05": {"score": 4, "flags": ["MISSING"], "note": "Real Clerk usage: ClerkProvider in app/layout.tsx, auth()/currentUser() in lib/route-auth.ts, isClerkConfigured() gate. But there is NO middleware.ts anywhere in the tree -- zero edge-level route protection for /admin or /driver; only a dev-header-based readDevSession() bypass gates anything early. Half of R-107 (real Clerk calls) is more genuine than the clone cluster's, but the 'middleware' half is simply absent."},
+      "arm-06": {"score": 2, "flags": ["MISSING", "THEATER"], "note": "No @clerk/nextjs dependency anywhere in package.json; zero Clerk usage in the whole tree. middleware.ts is real and functional but implements a first-party session check only. Code comments in lib/customers/session.ts explicitly say 'Clerk swap: replace this module's decode half with Clerk session claims' -- an aspirational comment describing work that was never done, not a real integration."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {"arm-02": "middleware.ts:1-19; lib/env.ts:25-30 (AUTH_MODE clerk/dev); app/layout.tsx has no ClerkProvider", "arm-05": "app/layout.tsx:1-18 (real ClerkProvider); lib/route-auth.ts:1-40 (real auth()/currentUser()); no middleware.ts file exists in the tree", "arm-06": "middleware.ts:1-24 (first-party session only); lib/customers/session.ts:11 comment ('Clerk swap...') with zero @clerk/nextjs import in package.json"}
+  },
+  {
+    "id": "R-108",
+    "name": "Sign-in / sign-up pages",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Real, working pages: app/login/page.tsx (staff sign-in, open-redirect-safe ?next= handling) and app/(storefront)/signin/page.tsx (customer sign-in + register via components/account/auth-forms.tsx, anti-enumeration register endpoint at app/api/account/register). Fully functional in the app's real (dev-mode) auth path; no Clerk-hosted page exists but none is needed since Clerk isn't the live path."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical login/signin pages; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "No /login, /signin, /sign-in, or /sign-up route exists anywhere in app/ (grep confirmed empty). The Clerk backend (auth()/currentUser()) is real but nothing in the app renders a page to actually sign in -- staff/customers have no way to reach an authenticated state outside the dev-auth header bypass."},
+      "arm-06": {"score": 2, "flags": ["MISSING", "BROKEN"], "note": "app/dev-login only works when APP_ENV=test (fail-closed off in prod/preview); app/invite/[token] is a one-time-use staff confirmation link, not a reusable sign-in. No customer sign-in page or route exists (lib/customers/session.ts is defined but grep shows zero call sites for encodeCustomerSession/createCustomerSession anywhere in app/). Once a staff session's 12h TTL expires there is no way to sign back in in production -- setup/invite are the only session-issuing paths and both are single-use."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/login/page.tsx:1-60; app/(storefront)/signin/page.tsx uses components/account/auth-forms.tsx", "arm-05": "grep -rn sign-in/sign-up/login across app/ returns nothing", "arm-06": "app/dev-login/dev-customer-login-form.tsx:10-11 comment ('Real customer auth is Clerk's slot'); grep for encodeCustomerSession call sites in app/ = 0 results"}
+  },
+  {
+    "id": "R-109",
+    "name": "Role model: RBAC + linear rank + allow-list carve-outs (customers are NOT staff)",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "Correctly resolves the customers-are-not-staff conflict: StaffUser (MANAGER/STAFF/DRIVER) and Customer are wholly separate Prisma models with separate sessions/cookies -- confirmed by schema.prisma and lib/auth/customer-session.ts. PermissionOverride GRANT/DENY rows are the allow-list carve-out. But there is NO linear-rank enforcement anywhere: PATCH /api/staff/[id] lets any staff.manage holder set ANY role (including MANAGER) on any other account with only a self-target block -- a STAFF member granted a staff.manage override could mint new Managers. Two of three required elements present."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical permissions.ts / staff routes; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 5, "flags": [], "note": "Same customer/staff separation (StaffUser.role vs separate Customer model implied by lib/staff-store.ts + clerkUserId linking), same GRANT/DENY override carve-out (lib/permissions.ts hasPermission). Same missing-rank gap: no ROLE_RANK concept anywhere in lib/permissions.ts, so a staff.manage grant is an unconstrained privilege-escalation path here too. Slightly thinner permission catalog (10 vs 15 permissions)."},
+      "arm-06": {"score": 9, "flags": [], "note": "The only arm that ships all three named elements: StaffUser vs Customer fully separate models; ROLE_RANK = {MANAGER:3, STAFF:2, DRIVER:1} explicitly defined in lib/permissions.ts and ENFORCED via canManageStaffRole/canImpersonate (verified called in app/api/admin/staff/route.ts, staff/[id]/route.ts, staff/[id]/revoke, staff/[id]/impersonate); GRANT/DENY overrides as the carve-out layer on top. This closes the exact escalation gap the clone cluster and arm-05 leave open."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "prisma/schema.prisma:9-13 StaffRole enum + Customer model (lines ~55+); lib/auth/permissions.ts (no rank concept); app/api/staff/[id]/route.ts:11-21 (role PATCH has only a self-target check, no rank check)", "arm-06": "lib/permissions.ts:18-27 (ROLE_DEFAULTS), 49-64 (ROLE_RANK, canManageStaffRole, canImpersonate); app/api/admin/staff/[id]/route.ts:42-47 (rank check enforced on every role/override write)"}
+  },
+  {
+    "id": "R-110",
+    "name": "Per-user permission grants/denies + override editor",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "PermissionOverride model (staffUserId, permission, effect GRANT/DENY, unique per pair); PUT /api/staff/[id]/overrides replaces the full override set atomically, kills the target's live sessions, and audits before/after -- clean tri-state editor backend. Self-target block present."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical override route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 6, "flags": [], "note": "overrides field on PATCH /api/staff/[staffId] (action=update) accepts a partial GRANT/DENY record and rewrites it inside updateStaff with optimistic version guard; UI exists at app/admin/staff/page.tsx. Functional, but no dedicated diff/audit-before-after comparison observed and no rank guard on who can grant what (see R-109)."},
+      "arm-06": {"score": 9, "flags": [], "note": "overrides array on PATCH /api/admin/staff/[id] (permission + effect|null), version-guarded optimistic concurrency, clears stale overrides on role change (a demoted account doesn't keep prior GRANTs), full before/after audit, AND is rank-checked so an override write can never be used to reach above the actor's own rank -- the most complete implementation seen."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "app/api/staff/[id]/overrides/route.ts:16-64", "arm-05": "app/api/staff/[staffId]/route.ts:41-52; lib/staff-store.ts updateStaff", "arm-06": "app/api/admin/staff/[id]/route.ts:10-21,42-67 (rank-checked, version-guarded, audited)"}
+  },
+  {
+    "id": "R-111",
+    "name": "Server-side authorization gate (requirePermission)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "requirePermissionApi/requirePermissionPage in lib/auth/current-user.ts return proper 401/403; used directly or through the lib/api/admin-handler.ts wrapper across virtually all admin routes -- swept all 63 admin route.ts files, 11 'unguarded' hits were false positives (all route through adminHandler, which calls requirePermissionApi internally and defaults to fulfillment.manage)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical gate; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 8, "flags": [], "note": "authorize()/requireApiPermission() in lib/route-auth.ts; swept every route.ts under app/api/admin -- all 19 call authorize(request, permission). Solid, if a thinner surface than the clone cluster/arm-06."},
+      "arm-06": {"score": 9, "flags": [], "note": "requirePermission/requireApiPermission in lib/auth.ts; swept all 81 admin route.ts files -- 80 call it directly, the one exception (impersonation/stop) legitimately uses a session-level check instead of a permission (ending your own impersonation needs no specific permission). No gaps found."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/auth/current-user.ts:51-75; lib/api/admin-handler.ts:32-67", "arm-05": "lib/route-auth.ts:42-54; 19/19 admin routes call authorize()", "arm-06": "lib/auth.ts:60-83; 80/81 admin routes call requirePermission/requireApiPermission"}
+  },
+  {
+    "id": "R-112",
+    "name": "Staff confirmation + revocation gate",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "StaffStatus ACTIVE/REVOKED; PATCH /api/staff/[id] flips status and kills all the target's live sessions in the same transaction; getStaffContext() re-checks status==ACTIVE on every request. Revocation is solid. But there is no confirmation step at all -- staff are created directly ACTIVE with a password by an admin; no PENDING/invite state exists."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical revocation route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 6, "flags": [], "note": "revokedAt field + revokeStaff() action; hasStaffPermission checks !revokedAt on every call. Staff are created via manual clerkUserId entry (effectively 'pre-confirmed' since the admin already knows the Clerk id) -- same missing-confirmation-step gap as the clone cluster, just via a different mechanism."},
+      "arm-06": {"score": 9, "flags": [], "note": "Genuine two-step lifecycle: StaffStatus PENDING (default) -> invite link consumed at /invite/[token] -> ACTIVE with confirmedAt stamped and audited as 'staff_confirm'. Revocation at /api/admin/staff/[id]/revoke is rank-checked (canManageStaffRole) and self-target-blocked. Both halves of R-112 genuinely implemented."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "app/api/staff/[id]/route.ts:11-55 (revocation only, no confirm step); prisma/schema.prisma StaffStatus enum has only ACTIVE/REVOKED", "arm-06": "prisma/schema.prisma:134-135 (status default PENDING); app/api/invite/[token]/route.ts:9-28 (confirm); app/api/admin/staff/[id]/revoke/route.ts:12-20 (rank-checked revoke)"}
+  },
+  {
+    "id": "R-113",
+    "name": "Staff invitation identity linking",
+    "scores": {
+      "arm-01": {"score": 3, "flags": ["MISSING"], "note": "No invite flow exists. Staff are created directly ACTIVE via POST /api/staff with name/email/role/password set by an existing staff.manage holder -- there is no token, no invite link, no separate confirm/link step. clerkUserId column exists on StaffUser for a future Clerk-mode link but nothing in the app populates or consumes it for staff. This matches the reconciled inventory's own note that R-114 (the customer analog) is UNIQUE-TO-arm-01-in-the-source and this staff analog is genuinely thin in the rebuild."},
+      "arm-02": {"score": 3, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 3, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 3, "flags": ["MISSING", "CLONE-TIE"], "note": "Identical staff-creation route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 4, "flags": [], "note": "POST /api/staff requires the admin to type in the invitee's clerkUserId directly (inviteSchema requires clerkUserId string) -- this is a real identity-link field but not a self-serve invite/token flow; the new staffer must already have signed in via Clerk elsewhere and handed their user id to an admin out-of-band. Thin but a notch above the clone cluster's plain password-create."},
+      "arm-06": {"score": 9, "flags": [], "note": "Real invite flow: POST /api/admin/staff mints crypto.randomUUID() inviteToken + invitedAt, PENDING status; GET/POST /app/invite/[token] validates a 7-day TTL, flips to ACTIVE, stamps confirmedAt, creates the real login session, and audits 'staff_confirm'. This is the one arm that actually implements token-based invitation identity linking end to end (minor nit: inviteToken is stored in plaintext rather than hashed, unlike session tokens)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-05",
+    "evidence": {"arm-02": "app/api/staff/route.ts:19-64 (direct create with password, no token)", "arm-05": "app/api/staff/route.ts:7-12,20-39 (clerkUserId required in the invite body)", "arm-06": "app/api/admin/staff/route.ts:53 (crypto.randomUUID() inviteToken); app/api/invite/[token]/route.ts:1-34; prisma/schema.prisma:136-138"}
+  },
+  {
+    "id": "R-114",
+    "name": "Customer identity linking + owned profile updates",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/customers.ts findOrLinkCustomer() links a Customer row by clerkUserId (clerk mode) or matches by email (dev mode, DECISION-P4-6: match by email only, never phone). PATCH /api/account/profile reads the customer id ONLY from the session cookie (getCustomerContext()) -- never accepts a client-supplied id -- and updates name/phone with a unique-phone conflict handled as 409. Clean ownership enforcement."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical profile route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 3, "flags": ["MISSING"], "note": "Identity linking exists (findCustomerForRequest resolves a Clerk-authenticated user to a Customer row in lib/order-builder.ts getAccount), but there is NO profile-update endpoint anywhere -- app/api/account/route.ts only implements GET (read-only account view + orders). 'Owned profile updates' is absent."},
+      "arm-06": {"score": 7, "flags": [], "note": "app/api/account/profile/route.ts + lib/customers/session.ts scope updates to the session's own customerId; clerkUserId column present on Customer for future linking. Solid, though undermined by the same broken customer-sign-in story noted under R-108 -- the ownership check is well-written code that customers in production have no real way to reach."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/customers.ts:29-75; app/api/account/profile/route.ts:14-39 (id read only from getCustomerContext())", "arm-05": "app/api/account/route.ts:1-15 (GET only); grep for 'profile' PATCH/PUT across app+lib = 0 hits beyond a dashboard display component", "arm-06": "app/api/account/profile/route.ts; lib/customers/session.ts:22-40"}
+  },
+  {
+    "id": "R-115",
+    "name": "Admin + messenger application gates",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/(admin)/admin/layout.tsx is a real server component: `if (!staff) redirect('/login?next=/admin')`, and drivers are explicitly redirected to /driver ('Drivers have no admin access'). app/(driver)/driver/page.tsx equally gates with getStaffContext(). Nav items are additionally filtered per-permission. Solid layout-level (not just API-level) gate on both sections."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical layout gates; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 3, "flags": [], "note": "app/admin/layout.tsx has ZERO auth check -- confirmed by reading the file: it renders the sidebar/nav shell unconditionally for anyone who requests the URL. All 13 admin page.tsx files under app/admin are 'use client' components with no server check either. The underlying data IS protected (every /api/admin/* route calls authorize()), so no sensitive data actually leaks, but the intended defense-in-depth layout/page gate named by this item is simply missing -- an unauthenticated visitor can navigate the entire admin shell UI. Driver access is token-only (no login-gated driver home), which is a reasonable design, not a gap."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(admin)/admin/layout.tsx calls requireStaff() then forbidden() unless hasPermission(ctx.staff,'admin.access') -- real server-side gate, matching the clone cluster's rigor."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/(admin)/admin/layout.tsx:34-40; app/(driver)/driver/page.tsx:1-10", "arm-05": "app/admin/layout.tsx:1-27 (no auth call at all); 0/13 admin page.tsx files import authorize/authenticate", "arm-06": "app/(admin)/admin/layout.tsx:14-17 (requireStaff + forbidden on missing admin.access)"}
+  },
+  {
+    "id": "R-116",
+    "name": "Driver route ownership scoping",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "resolveDriverAccess(token) resolves a magic-link token to exactly one route; markStopDelivered() (lib/routes/service.ts:180-196) does `findFirst({ where: { id: stopId, routeId, route: { seasonId } } })` before allowing a delivery flip -- a stop from a different route can never be marked delivered through someone else's link (no IDOR). PIN gate is HMAC + timing-safe + throttled."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/routes/driver-access.ts diff vs arm-02 is a BOM character + trailing newline only (verified with `diff -u`) -- functionally identical, not a real divergence despite being one of the two files the ground truth flags for this batch."},
+      "arm-05": {"score": 8, "flags": [], "note": "deliverDriverStop(token, stopId, pin) in lib/delivery.ts:304-310 does `findFirst({ where: { id: stopId, routeId: link.routeId } })` -- properly scoped, no IDOR. PIN check (loadDriverLink) is timing-safe with failedAttempts throttling. Solid, on par with the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "Same pattern as the clone cluster: app/api/drive/[token]/guard.ts resolves the link then scopes every stop mutation to that route; PIN cookie verification and throttling mirror lib/routes/links.ts's HMAC + timing-safe design."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/routes/driver-access.ts:19-37; lib/routes/service.ts:180-196 (findFirst scoped by id+routeId+seasonId)", "arm-04": "diff lib/routes/driver-access.ts arm-02 vs arm-04 = only a leading BOM char + trailing newline", "arm-05": "lib/delivery.ts:304-310 (scoped findFirst); lib/delivery.ts:146-181 (timing-safe PIN + throttle)"}
+  },
+  {
+    "id": "R-117",
+    "name": "\"Must be staff\" hard guard + storefront staff check",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Same evidence as R-115: app/(admin)/admin/layout.tsx hard-redirects any non-staff session away from /admin, and components/storefront/user-menu.tsx conditionally shows a 'Staff' link only when a staff session exists (storefront-side check). Real, server-verified hard guard, not just a UI toggle."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical guard; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 2, "flags": ["MISSING"], "note": "No layout-level 'must be staff' guard exists anywhere (see R-115) -- the admin shell renders for anonymous visitors. Since there's also no working sign-in page (R-108), this is a compounding gap: a real staff hard-guard was never actually built at the page level, only inside individual API handlers."},
+      "arm-06": {"score": 8, "flags": [], "note": "requireStaff() + forbidden() in the admin layout is a real hard guard equivalent in rigor to the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/(admin)/admin/layout.tsx:34-40", "arm-05": "app/admin/layout.tsx:1-27 (no guard)", "arm-06": "app/(admin)/admin/layout.tsx:14-17"}
+  },
+  {
+    "id": "R-118",
+    "name": "canDrive carve-out for driver-route permissions",
+    "scores": {
+      "arm-01": {"score": 4, "flags": ["MISSING"], "note": "No explicit 'canDrive' permission carve-out exists. ROLE_DEFAULTS.DRIVER is a literal empty array in lib/auth/permissions.ts, and the admin layout explicitly redirects DRIVER-role staff away from /admin entirely -- 'Drivers have no admin access... Routes are worked through the magic link.' The functional goal (a driver reaching their own route) is met, but through the token-link system, not a named permission carve-out on the RBAC layer as the item describes."},
+      "arm-02": {"score": 4, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 4, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 4, "flags": ["MISSING", "CLONE-TIE"], "note": "Identical; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 4, "flags": ["MISSING"], "note": "Same pattern: DRIVER role carries zero permissions (lib/permissions.ts rolePermissions.DRIVER=[]) and driver route access is entirely magic-link based (app/driver/[token]). No canDrive-style permission exists."},
+      "arm-06": {"score": 4, "flags": ["MISSING"], "note": "Identical resolution: DRIVER:[] in lib/permissions.ts, no canDrive constant anywhere; drivers exclusively use /drive/[token] magic links. All three architectures converge on the same alternative design (token links instead of a permission carve-out), so this is a converged gap rather than a differentiator."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/auth/permissions.ts:28 (DRIVER: []); app/(driver)/driver/page.tsx:9-12 ('no login needed on the road')", "arm-06": "lib/permissions.ts:26 (DRIVER: []); no canDrive symbol anywhere in the tree"}
+  },
+  {
+    "id": "R-119",
+    "name": "Staff-management mutation hardening (self-target blocks)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "PATCH /api/staff/[id] and PUT /api/staff/[id]/overrides both explicitly reject `id === gate.staff.realUser.id` with a 400 before touching anything. Impersonation route also blocks self-impersonation. Consistent, tested (tests/permissions.test.ts covers role defaults, though not this specific self-block path directly in that file -- the block itself is in the route code, verified by direct read)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical self-target blocks; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 8, "flags": [], "note": "PATCH /api/staff/[staffId] explicitly checks `staffId === authorization.staffMember.id` and returns 403 before revoke/impersonate/update proceed. Same pattern, verified directly in the route code."},
+      "arm-06": {"score": 9, "flags": [], "note": "canTargetStaff(actorId, targetId) helper is a named, reusable primitive (lib/permissions.ts) used consistently across staff/[id], revoke, and impersonate routes, PLUS combined with the rank check (canManageStaffRole) so hardening covers both self-targeting and privilege escalation in one pass -- and it's directly unit-tested in scripts/test-permissions.mts."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "app/api/staff/[id]/route.ts:15-21; app/api/staff/[id]/overrides/route.ts:21-24; app/api/impersonate/route.ts:18-20", "arm-05": "app/api/staff/[staffId]/route.ts:26-28", "arm-06": "lib/permissions.ts:45-47 (canTargetStaff); scripts/test-permissions.mts:41-42 (unit test)"}
+  },
+  {
+    "id": "R-120",
+    "name": "Security-relevant audit trail + session login stamp",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "AuditLog model + lib/audit.ts writeAudit() called consistently on staff create/role-change/override-change/revoke/impersonate/media-upload/test-console-actions etc., always inside the same transaction as the mutation (atomic). StaffUser.lastLoginAt exists on the schema but no route was found explicitly stamping it on login -- a minor gap in the 'session login stamp' half."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical audit plumbing; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 6, "flags": [], "note": "AuditEvent rows created across delivery/staff/test-console actions (verified in lib/delivery.ts, lib/staff-store.ts, test-console route). Session-level metadata (ip, userAgent) is captured on AuthSession creation in some paths but less systematically than the other arms."},
+      "arm-06": {"score": 8, "flags": [], "note": "recordAudit() called broadly (staff, impersonation, revoke, client-error, testops); AuthSession rows capture ip + userAgent on every createLoginSession() call (lib/auth.ts:89-100) -- a genuine 'session login stamp,' arguably more complete than the clone cluster's unused lastLoginAt column."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/audit.ts; app/api/staff/route.ts:51-60 (audit inside the create transaction); prisma/schema.prisma StaffUser.lastLoginAt (declared, no writer found)", "arm-06": "lib/auth.ts:89-100 (createLoginSession captures ip/userAgent every login); lib/audit.ts recordAudit used broadly"}
+  },
+  {
+    "id": "R-121",
+    "name": "Draft-order ownership + anti-enumeration gate",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "resolveDraftOwner() (lib/order-builder/draft-store.ts) derives ownership ONLY from the customer session cookie or an HMAC-hashed guest-draft cookie -- no API ever accepts a draft id from the client, so there is nothing for a second browser to enumerate. Guest draft token is stored only as its HMAC hash (DB dump can't be replayed as a cookie). Textbook anti-enumeration design, explicitly commented as R-121/R-023."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical draft-store logic; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 7, "flags": [], "note": "app/api/checkout/[draftId]/route.ts accepts a draftId in the URL rather than deriving it purely from a session/cookie -- this is a materially different (and slightly weaker) shape than the clone cluster's cookie-only design. Ownership is still checked server-side against the resolved customer/guest identity before any draft is returned or mutated (not a raw id-based lookup), so it isn't a bare IDOR, but the surface for enumeration (a guessable/sequential draftId in the URL) is larger than the cookie-only clone-cluster/arm-06 design."},
+      "arm-06": {"score": 8, "flags": [], "note": "Customer/guest draft ownership is resolved server-side from session state similarly to the clone cluster (lib/customers/session.ts + guest cookie pattern); checkout/submit route re-derives the owner rather than trusting a client-supplied id."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/order-builder/draft-store.ts:11-50 (owner resolved from cookies only, guest token stored as HMAC hash)", "arm-05": "app/api/checkout/[draftId]/route.ts (draftId taken from the URL path)"}
+  },
+  {
+    "id": "R-122",
+    "name": "Guarded public JSON endpoints (same-origin + IP rate limit + Zod)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/public-guard.ts: isSameOrigin() checks Origin falling back to Referer (refuses when neither header is present), guardPublicEndpoint() layers a per-IP fixed-window rate limit (lib/rate-limit.ts, TRUST_PROXY-gated XFF handling to prevent spoofed rate-limit keys) on top; every public mutation route (checkout, newsletter, client-error) calls it, and each route layers its own Zod schema. Solid, no test file though."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/public-guard.ts diff vs arm-02 is BOM/newline only (functionally identical), BUT arm-04 uniquely adds tests/public-guard.test.ts -- 4 real unit tests covering no-header refusal, foreign-origin refusal, own-origin pass, and unparseable-Referer refusal. Genuine, evidenced improvement over the rest of the cluster on the 'tested' dimension for this exact item."},
+      "arm-05": {"score": 7, "flags": [], "note": "hasSameOrigin() checked on every state-changing admin/public route (verified in staff, checkout/local); Zod schemas present throughout. Less clear evidence of a dedicated per-IP rate limiter on public storefront endpoints specifically (rate limiting was found on cron/client-error paths, less systematically on public POST routes)."},
+      "arm-06": {"score": 8, "flags": [], "note": "lib/public-guard.ts is functionally identical to the clone cluster's (same isSameOrigin/rate-limit shape, same code comments even), applied consistently to checkout/newsletter/client-error routes."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/public-guard.ts:1-39; lib/rate-limit.ts:1-37 (TRUST_PROXY-gated clientIp)", "arm-04": "tests/public-guard.test.ts:1-29 (4 unit tests against isSameOrigin, absent in arm-01/02/03)", "arm-06": "lib/public-guard.ts (same shape/comments as clone cluster)"}
+  },
+  {
+    "id": "R-123",
+    "name": "Signed email-preference changes (HMAC, timing-safe)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/newsletter-token.ts: base64url(email).expiresMs.hmac token, createHmac('sha256', SESSION_SECRET), verified with a length-check + node:crypto timingSafeEqual before decoding the payload -- textbook constant-time verification, used by both the preferences page and one-click unsubscribe."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical token module; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/newsletter.ts uses createHmac + timingSafeEqual (imported explicitly) AND additionally supports secret rotation via a comma-separated NEWSLETTER_TOKEN_SECRETS list with a legacy single-secret fallback -- a genuinely more production-minded touch than the clone cluster's single-secret design."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/newsletter/tokens.ts + lib/hmac.ts implement HMAC-SHA256 via WebCrypto (edge-compatible) with a hand-rolled constant-time safeEqual() (length check + XOR-accumulate loop, documented as equivalent to node's timingSafeEqual) -- correct and more portable than the Node-only approach, at the same security bar."}
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "lib/newsletter-token.ts:1-38 (createHmac + timingSafeEqual)", "arm-05": "lib/newsletter.ts:1,24-41 (rotating NEWSLETTER_TOKEN_SECRETS)", "arm-06": "lib/newsletter/tokens.ts:1-34; lib/hmac.ts:30-42 (safeEqual constant-time compare via WebCrypto)"}
+  },
+  {
+    "id": "R-124",
+    "name": "Cron endpoint authentication (bearer secret)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "lib/cron.ts requireCronAuth(): 503 when CRON_SECRET is unset (fail-closed, never silently unauthenticated), else constant-time Buffer compare of 'Bearer <secret>' via timingSafeEqual with a length pre-check. Wrapped by runCronJob() which records a CronRunLog row (start/finish/outcome) around every job. Excellent."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical cron auth; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/cron-auth.ts authorizeCron(): equivalent fail-closed + timingSafeEqual pattern (Buffer-length-checked before compare). Same rigor, slightly less run-log/observability plumbing evidenced around it."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/cron-auth.ts isCronAuthorized() hashes both the received and expected 'Bearer ...' strings with SHA-256 before timingSafeEqual, explicitly to avoid any possible length-based side-channel from the raw string comparison -- a slightly more paranoid, and correct, refinement over the clone cluster's approach."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/cron.ts:1-22 (503 fail-closed; timingSafeEqual)", "arm-05": "lib/cron-auth.ts:1-14", "arm-06": "lib/cron-auth.ts:1-17 (SHA-256 pre-hash before timingSafeEqual)"}
+  },
+  {
+    "id": "R-125",
+    "name": "Stripe webhook authenticity + idempotency",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "app/api/webhooks/stripe/route.ts verifies the Stripe signature before any parsing, then inserts a StripeWebhookEvent row keyed by event id inside a try/catch for P2002 (unique violation = replay, short-circuits to 200); handlers are written to be retry-safe (charge keyed by payment intent, refunds keyed by refund id). DECISION-P5-8 explicitly documents the pending->processed ledger design and its narrow concurrent-delivery caveat."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical webhook route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 8, "flags": [], "note": "app/api/stripe/webhook/route.ts: isValidStripeSignature() gate, WebhookEvent row insert with P2002-as-replay handling identical in shape to the clone cluster's pattern (lib/checkout.ts:259-261), refund sync on charge.refunded. Solid parity."},
+      "arm-06": {"score": 9, "flags": [], "note": "app/api/webhooks/stripe/route.ts: signature check on the RAW body before any JSON.parse, Zod-validated envelope AND per-event-type object shape (a signed-but-malformed payload is a 400, never an unsafe cast -- a nuance the clone cluster's zod schema handles less explicitly), StripeWebhookEvent unique-id idempotency row, and on handler failure the idempotency row is deleted so Stripe's retry is treated as a first delivery rather than swallowed. Very thorough."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "app/api/webhooks/stripe/route.ts (signature verify, StripeWebhookEvent P2002 replay-guard)", "arm-05": "app/api/stripe/webhook/route.ts; lib/checkout.ts:240-261", "arm-06": "app/api/webhooks/stripe/route.ts:28-101 (raw-body signature check, zod envelope+object validation, delete-on-failure idempotency row)"}
+  },
+  {
+    "id": "R-126",
+    "name": "Charged-amount + fulfillment safety checks (auto-refund stale/failed)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Webhook requires `session.amount_total === sessionRecord.amountCents === order.totalCents` AND the order to still be a live DRAFT with an open session; any mismatch triggers autoRefund() and marks the session auto_refunded (or refund_failed if the gateway call itself fails, leaving the order untouched for ops reconciliation -- DECISION-P5-9). Both the charge-in and refund-out are booked so the ledger matches Stripe."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical safety logic; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 7, "flags": [], "note": "refundSafetyPayment()/refundNeeded flag in lib/checkout.ts triggers a refund path on mismatch; present and wired into the webhook route, but with less explicit multi-field amount cross-checking observed than the clone cluster/arm-06 (spot check found the mismatch-triggers-refund shape but not an equally explicit three-way amount equality check)."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/checkout/webhook.ts explicitly checks `session.amount_total !== order.totalCents`, session-id mismatch, and stale/non-DRAFT order state, routing every failure to a named safetyRefund() outcome ('safety_refund') with the charged/expected amounts recorded on the audit row. Comparable rigor to the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/api/webhooks/stripe/route.ts:143-157,184-196 (three-way amount check + auto-refund/refund_failed states)", "arm-05": "lib/checkout.ts (refundNeeded/refundSafetyPayment)", "arm-06": "lib/checkout/webhook.ts:31-106 (amount_total !== totalCents -> safety_refund, audited)"}
+  },
+  {
+    "id": "R-127",
+    "name": "Server-enforced offline payment policy",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "Deliberate resolution documented in results/BUILD-PLAN.md: 'server-enforced offline-payment policy (staff only)'. The public storefront checkout route (app/api/checkout/route.ts) ALWAYS opens a real Stripe session -- there is no customer-facing cash/check option at all. Offline payment only exists inside the staff-gated POS flow (app/api/admin/pos/checkout/route.ts, requires orders.manage + payments.record), with an explicit comment: 'no public route accepts CASH/CHECK -- this staff gate is the only door.' This is a safer, if narrower, interpretation than the source app's customer-facing toggle; the policy IS server-enforced, just via omission of the public path rather than a settings-gated public path."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical policy; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 5, "flags": [], "note": "Same staff-only pattern: CASH/CHECK payments only appear in app/api/admin/payments/[paymentId]/route.ts (staff-authorized); app/api/checkout/local/route.ts is a NODE_ENV=development-gated Stripe *mock* harness, not a real offline-payment path. No customer-facing settings-gated toggle exists either."},
+      "arm-06": {"score": 6, "flags": [], "note": "Same architecture as the clone cluster: CASH/CHECK only reachable through app/api/admin/orders/[orderId]/payments/route.ts (staff-permission gated); no customer-facing offline checkout route exists in app/api/checkout/submit."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/api/admin/pos/checkout/route.ts:21-27 ('no public route accepts CASH/CHECK'); results/BUILD-PLAN.md:40,91", "arm-05": "app/api/admin/payments/[paymentId]/route.ts (staff-only); app/api/checkout/local/route.ts:6 (dev-only mock, not a policy toggle)", "arm-06": "app/api/admin/orders/[orderId]/payments/route.ts (staff-only CASH/CHECK)"}
+  },
+  {
+    "id": "R-128",
+    "name": "Restricted + validated media uploads",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/media.ts: 5MB cap, magic-byte signature check (PNG/JPEG/GIF/WEBP) independent of the client-declared content-type ('a renamed .exe fails the signature check no matter what the browser claims'), guarded behind media.manage permission at app/api/admin/media/route.ts, audited on upload."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical media validation; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 7, "flags": [], "note": "lib/media.ts validateCatalogImage(): magic-byte check for jpg/png/webp (no gif), 5MB cap. One fewer format than the other arms but the same magic-byte-over-declared-type discipline."},
+      "arm-06": {"score": 8, "flags": [], "note": "lib/media/validation.ts: 4-format magic-byte sniffing (jpeg/png/gif/webp), 5MB cap, AND an explicit extension-vs-content-type cross-check ('the file extension does not match its image type') -- one nuance beyond the clone cluster's pure-signature check."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/media.ts:14-30 (IMAGE_SIGNATURES magic-byte table, 5MB MAX_UPLOAD_BYTES)", "arm-05": "lib/media.ts:1-19 (3-format magic-byte check)", "arm-06": "lib/media/validation.ts:1-58 (4-format magic-byte check + extension cross-check)"}
+  },
+  {
+    "id": "R-129",
+    "name": "Test-only destructive operations (reset/wipe/seed)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "app/api/admin/test-console/route.ts is fail-closed (404 unless isTestMode(), which is itself false whenever a real STRIPE_SECRET_KEY is configured) AND requires settings.manage. wipeOpenSeason() (lib/test-console.ts) is carefully SEASON-SCOPED -- deletes only the currently open season's transactional rows (orders/packages/routes/payments/etc.) in FK-safe order inside one transaction, explicitly preserving catalog/customers/staff/audit/other-seasons. Every action is audited."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical test-console; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 6, "flags": [], "note": "app/api/admin/test-console/route.ts is gated by settings.manage + isTestConsoleEnabled() (TEST_MODE=true AND NODE_ENV in dev/test -- fail-closed). But wipeTestData() builds a dynamic TRUNCATE over EVERY table returned by a `pg_tables` query except a small hardcoded exclude-list (StaffUser/AppSetting/AuditEvent) -- this truncates Customers, catalog, all seasons, everything, via string-interpolated raw SQL (table names are quote-escaped and sourced from the system catalog, so not attacker-controlled, but the technique is far blunter/riskier-looking than the clone cluster's explicit, season-scoped per-table deletes)."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/api/admin/test-ops/route.ts double-gates on settings.manage PLUS requireTestEnv() (APP_ENV=test), explicitly commented 'neither alone is enough'. runTestOps() truncates an explicit, hardcoded WIPE_TABLES allowlist (safer than arm-05's exclude-everything-else approach) with FK CASCADE, and the allowlist is unit-pinned against the schema so drift is a test failure. Not season-scoped (wipes everything except staff/audit/sessions), a coarser design than the clone cluster's season-only wipe but a deliberate, safely-built one."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/api/admin/test-console/route.ts:1-34; lib/test-console.ts:1-60 (season-scoped, FK-safe transaction)", "arm-05": "app/api/admin/test-console/route.ts:1-25 (dynamic pg_tables TRUNCATE minus a small exclude-list)", "arm-06": "app/api/admin/test-ops/route.ts:15-39 (dual gate); lib/testops/actions.ts:1-40 (explicit WIPE_TABLES allowlist)"}
+  },
+  {
+    "id": "R-130",
+    "name": "Empty-database bootstrap lockout",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "POST /api/setup runs the staffCount-check-then-create inside one transaction (re-checks count() again post-lock semantics via the transaction itself) so two concurrent bootstrap POSTs can't both create a manager; returns 423 once any StaffUser exists. GET exposes a locked boolean for the setup page. Audited."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical setup route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 5, "flags": [], "note": "POST /api/setup requires the caller to already be Clerk-authenticated (authenticate(request, true)) before createFirstManager() runs -- a reasonable idea in principle, but since no sign-in page/middleware exists anywhere in this arm (R-107/R-108), there is no real way to reach an authenticated state to even attempt bootstrap outside the dev bypass. The lockout-on-second-attempt logic itself (canBootstrap()) is fine, but the feature is practically unreachable in a real deployment."},
+      "arm-06": {"score": 9, "flags": [], "note": "POST /api/setup takes an explicit Postgres advisory lock (`pg_advisory_xact_lock(1)`) inside the transaction before the count check -- a stronger concurrency guard than the clone cluster's plain transactional re-check, genuinely closing a narrow race the other arms only mitigate via transaction isolation. Audited, sets setup.completed."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "app/api/setup/route.ts:19-62 (transaction re-check + 423 lock)", "arm-05": "app/api/setup/route.ts:19-27 (requires prior Clerk auth, which is unreachable without a sign-in page)", "arm-06": "app/api/setup/route.ts:19-33 (pg_advisory_xact_lock(1) + count check)"}
+  },
+  {
+    "id": "R-131",
+    "name": "Startup secret + environment validation",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "lib/env.ts is a comprehensive Zod schema (SESSION_SECRET min 16, AUTH_MODE enum, Stripe/Shippo/Twilio conditionals via .superRefine -- e.g. refuses STRIPE_SECRET_KEY with the repo-default webhook secret, refuses NODE_ENV=production without a real gateway); instrumentation.ts's register() hook imports lib/env at server startup so misconfiguration throws before any request is served. Only nit (flagged in the arm's own AGGREGATE-REVIEW-P2/P3/P8): SESSION_SECRET's 16-char minimum is low and the shipped .env.example default is a known string, so an operator who doesn't rotate it weakens every HMAC in the app."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical env.ts; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 2, "flags": ["THEATER"], "note": "lib/env.ts defines requireProductionEnvironment() (Zod-validates only DATABASE_URL + two Clerk keys) but grep across the entire app/lib/scripts tree shows it is NEVER CALLED anywhere -- pure dead code. The only env checks actually exercised at runtime are the narrower isClerkConfigured()/isDevAuthEnabled() predicates. No SESSION_SECRET, CRON_SECRET, or Stripe/webhook-secret validation exists at all. This is the weakest implementation of the batch."},
+      "arm-06": {"score": 7, "flags": [], "note": "lib/env.ts builds its Zod schema from a declarative lib/env-spec.ts table and executes `export const env = loadEnv()` at module top-level -- since nearly every route transitively imports lib/env (via lib/db.ts etc.), this throws on first import/request rather than via an explicit instrumentation.ts hook. Functionally similar fail-fast behavior to the clone cluster, just without the same explicit startup-hook ceremony."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "lib/env.ts:1-95 (comprehensive schema + superRefine fail-closed rules); instrumentation.ts:1-4 (register() imports lib/env)", "arm-05": "lib/env.ts:19-26 (requireProductionEnvironment defined); grep for call sites across app/lib/scripts = 0 (dead code)", "arm-06": "lib/env.ts:1-24 (top-level loadEnv() throws on first import); lib/env-spec.ts"}
+  },
+  {
+    "id": "R-132",
+    "name": "Bounded, redacted client error ingestion",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/api/client-error/route.ts: per-IP rate limit (10/min via lib/rate-limit.ts), Zod caps message<=500/path<=200, strips control characters (incl. CR/LF) before logging to defend against log-forging/terminal-escape injection, no stack traces or user data accepted. app/error.tsx posts only `error.digest ?? message.slice(0,500)` + pathname -- never the full stack."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical route; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 5, "flags": [], "note": "app/api/client-error/route.ts requires a shared `x-error-reporting-token` header (rejects if unset/default/mismatched) instead of a per-IP rate limit -- an unusual design for a client-side error beacon since the token would need to ship in the client bundle to be usable, undermining its secrecy; no rate limiting was found on this route at all. Zod caps are present (message<=500, no CR/LF via refine, path<=300)."},
+      "arm-06": {"score": 7, "flags": [], "note": "app/api/client-error/route.ts caps message/url/stackFirstLine lengths via Zod and applies a process-wide sliding-window rate limit (30/min) -- bounded and redacted, though the rate limit is global rather than per-IP (a single abusive client could exhaust the shared budget for everyone), a step down from the clone cluster's per-IP bucket."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/api/client-error/route.ts:1-27 (per-IP rate limit, control-char stripping, 500/200-char caps)", "arm-05": "app/api/client-error/route.ts:1-18 (shared-token gate, no rate limit)", "arm-06": "app/api/client-error/route.ts:1-33 (global 30/60s rate limit, Zod caps)"}
+  },
+  {
+    "id": "R-133",
+    "name": "Automated repository security guardrails (CI)",
+    "scores": {
+      "arm-01": {"score": 0, "flags": ["MISSING"], "note": "No .github directory, no CI workflow file of any kind, anywhere in the tree (confirmed by a repo-wide find for *.yml/*.yaml). Nothing to grade."},
+      "arm-02": {"score": 0, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical (absent) to arm-01."},
+      "arm-03": {"score": 0, "flags": ["MISSING", "CLONE-TIE"], "note": "Byte-identical (absent) to arm-01."},
+      "arm-04": {"score": 0, "flags": ["MISSING", "CLONE-TIE"], "note": "Also absent; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 4, "flags": [], "note": "The only arm with any CI at all: .github/workflows/ci.yml runs lint, typecheck, a migration-guard/harness step, and the test suite on push/PR. It is generic CI (not security-specific -- no secret scanning, SAST, or dependency audit step), but it is real, present, and would catch a meaningful class of regressions the other five arms have zero automated protection against."},
+      "arm-06": {"score": 0, "flags": ["MISSING"], "note": "No .github directory or any CI workflow file anywhere in the tree, despite the package.json 'ci' script (lint+typecheck+migration-guard+tests) being clearly designed to be wired into one. The script exists; nothing actually invokes it automatically."}
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "repo-wide find for *.yml/*.yaml under workspace = no results", "arm-05": ".github/workflows/ci.yml:1-22", "arm-06": "package.json 'ci' script exists (line ~20) but no .github/workflows directory anywhere"}
+  },
+  {
+    "id": "R-134",
+    "name": "Guarded staff-only API routes (media/exports/route-builder)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "app/api/admin/media (media.manage), app/api/admin/exports/[dataset] (reports.view, streamed CSV), and the delivery-route builder surface (app/api/admin/routes/*, guarded via lib/api/admin-handler.ts's default fulfillment.manage permission) are all consistently gated -- confirmed via a full sweep of all 63 admin route.ts files, with every apparent gap resolved to the shared adminHandler wrapper."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical routes; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 7, "flags": [], "note": "All 19 app/api/admin/* routes (including media, catalog, delivery/route-building) call authorize() -- full sweep confirmed zero gaps."},
+      "arm-06": {"score": 8, "flags": [], "note": "80/81 admin routes call requirePermission/requireApiPermission (the one exception is a legitimate session-only check); media, export, and route-builder surfaces (app/api/admin/media, /export, /admin/routes) all confirmed gated."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-02": "app/api/admin/media/route.ts:6-20; app/api/admin/exports/[dataset]/route.ts:11-13; full sweep of 63 admin routes = 0 real gaps", "arm-05": "full sweep of 19 admin routes = 0 gaps", "arm-06": "full sweep of 81 admin routes = 1 legitimate exception (impersonation/stop)"}
+  },
+  {
+    "id": "R-135",
+    "name": "Permission unit tests",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "tests/permissions.test.ts (node:test) covers manager-gets-everything, staff baseline (explicit array equality, confirms no refund permission), driver-gets-nothing, grant-adds, deny-removes, and unknown-override-is-ignored -- 6 focused, real assertions against resolvePermissions()."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical test file; no functional diff in this batch's touched files. (arm-04's OTHER test addition, tests/public-guard.test.ts, is credited under R-122, not here.)"},
+      "arm-05": {"score": 7, "flags": [], "note": "tests/permissions.test.ts covers deny-beats-role, grant-scopes-a-permission, and driver-has-nothing -- 3 assertions, a real but thinner suite than the clone cluster's 6."},
+      "arm-06": {"score": 8, "flags": [], "note": "Initially appeared to have NO tests (empty tests/ dir, no *.test.ts files) -- but scripts/test-permissions.mts (run via `npm run test:unit`) is a full custom-runner suite with 11+ checks covering role defaults, GRANT/DENY overrides, self-target blocks (R-119), AND rank-bounded impersonation/staff-management (canImpersonate/canManageStaffRole) -- broader coverage than any other arm's permission tests, just organized under scripts/ instead of tests/."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "tests/permissions.test.ts:1-44 (6 assertions)", "arm-05": "tests/permissions.test.ts:1-16 (3 assertions)", "arm-06": "scripts/test-permissions.mts:1-67 (11+ checks incl. rank-bounded impersonation/staff-management)"}
+  },
+  {
+    "id": "R-136",
+    "name": "Production error masking for server actions",
+    "scores": {
+      "arm-01": {"score": 5, "flags": [], "note": "This codebase has zero Next.js Server Actions ('use server') anywhere -- all mutations go through API routes, so the item's literal subject doesn't exist in this architecture. In practice, thrown ActionError instances carry developer-curated safe messages surfaced via `error.message` in ~17 route catch blocks (all staff-permission-gated already), and genuinely unexpected exceptions fall through to Next's default production error handling (masked to the client, logged server-side) since no custom catch-all wrapper was found. Adequate by convention, not by a dedicated masking mechanism."},
+      "arm-02": {"score": 5, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 5, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 5, "flags": ["CLONE-TIE"], "note": "Identical pattern; no functional diff in this batch's touched files."},
+      "arm-05": {"score": 4, "flags": [], "note": "Also no Server Actions; API routes return `error instanceof Error ? error.message : 'fallback'` in several places with no dedicated typed-error-to-safe-message mapping layer observed, slightly less structured than the clone cluster's ActionError convention."},
+      "arm-06": {"score": 7, "flags": [], "note": "No Server Actions either, but lib/errors.ts (typed NotFoundError/DomainRuleError) + lib/http-errors.ts's mapDomainError()/mapDomainErrorOrThrow() form a deliberate, reusable ladder: known domain errors map to safe messages + correct status codes, an optional `clientMessage` field lets a route show a staff-safe summary while logging the full detail server-side via console.error, and anything unrecognized is rethrown to Next's default (masked) handling. The most deliberately engineered error-masking layer of the batch, even though it targets API routes rather than literal server actions."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-02": "grep for 'use server' across app/lib = 0 results; app/api/admin/orders/[id]/finalize/route.ts:37 (curated ActionError.message pattern)", "arm-06": "lib/errors.ts:1-24; lib/http-errors.ts:1-42 (typed domain-error -> HTTP status ladder with clientMessage support)"}
+  }
+]

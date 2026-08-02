@@ -1,0 +1,363 @@
+[
+  {
+    "id": "R-072",
+    "name": "Fulfillment channel dashboard + bulk status actions",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Channel cards show package/gift counts and a grouping-savings heuristic but no per-stage breakdown grid; FulfillmentBoard (create-missing, bulk stage-select+apply with conflict reporting, split, regroup, print-batch/reprint) is broad and functional."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": [], "note": "Channel list shows real per-stage counts (NEW/PRINTED/PACKED/SENT/PICKED_UP) matching the spec's grid closely; dashboard's own bulk buttons cover only 3 of 4 target stages, but split/regroup/print-batch live on companion packages/print-batches pages."},
+      "arm-04": {"score": 9, "flags": [], "note": "Full per-channel table with per-stage counts, a rich actions.ts covering build/reprint/advance/bulk-stage/split/move plus label buy/void/tracking/address-validate — the most operationally complete fulfillment surface of the six."},
+      "arm-05": {"score": 6, "flags": [], "note": "app/admin/packages/page.tsx has channel package-count cards + checkbox bulk-status buttons (printed/packed/sent/picked-up) and regroup, but no per-stage breakdown table per channel — coarser than the spec's grid."},
+      "arm-06": {"score": 9, "flags": [], "note": "Per-channel Card with full stage-count list, checkbox-level bulk-advance to ANY target PackageStage (not just the next stage), production summary card, plus reprint-by-filing-group. Most granular of all six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/fulfillment/page.tsx; components/fulfillment-board.tsx",
+      "arm-04": "app/(admin)/admin/fulfillment/page.tsx; app/(admin)/admin/fulfillment/actions.ts; lib/fulfillment/channel-summary.ts",
+      "arm-06": "app/(admin)/admin/fulfillment/page.tsx; app/(admin)/admin/fulfillment/fulfillment-actions.tsx; lib/packages/fulfillment.ts"
+    }
+  },
+  {
+    "id": "R-073",
+    "name": "Fulfillment production + savings summaries",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "groupedSavings is a gift-count heuristic (max(0, giftCount-1)), not a real dollar figure; no dedicated open/shipped production counts card, just channel cards plus a recent-artifacts list."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 5, "flags": [], "note": "savings.note field exists but isn't populated with real numbers, and printedAwaitingShip is a plain count, not a dollar figure; production card (open/shipped-picked) is real."},
+      "arm-04": {"score": 9, "flags": [], "note": "readChannelSummaries() computes actual dollar savings from real charged shipping fees with a genuine per-channel charges/savings breakdown, plus a print-batches list."},
+      "arm-05": {"score": 6, "flags": [], "note": "productionUnits/consolidatedItems summary cards on the packages page — item counts only, no dollar-value savings summary."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated Production card (to print / to pack / to send) AND a Bulk consolidation savings card with destinations, recipients consolidated, fees collected, and fees avoided in dollars — the most complete savings summary of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/fulfillment/page.tsx (channels.groupedSavings)",
+      "arm-04": "lib/fulfillment/channel-summary.ts (readChannelSummaries — real dollar savings, per-channel charges/savings)",
+      "arm-06": "app/(admin)/admin/fulfillment/page.tsx (summary.production, summary.bulkSavings); lib/packages/fulfillment.ts"
+    }
+  },
+  {
+    "id": "R-074",
+    "name": "Delivery route builder (Mapbox)",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "geocodePackage calls real Mapbox geocoding when a token is configured (else throws) and the route-detail page renders an actual Mapbox static map image, but stop ORDER is just input order — zero optimization algorithm."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical geocode/route-builder/SVG-map code."},
+      "arm-03": {"score": 4, "flags": [], "note": "createRouteFromPackages runs a genuine nearest-neighbor ordering via haversine distance, but geocoding is a fully fake deterministic ZIP-offset generator (no real Mapbox call at all) and there is no map visualization."},
+      "arm-04": {"score": 8, "flags": [], "note": "Combines real Mapbox v6 geocoding (with graceful offline fallback) with a genuine nearest-neighbor orderStops() from a configurable origin and clean handling of unplaced stops; no visual map component."},
+      "arm-05": {"score": 5, "flags": [], "note": "geocodeAddress() actually THROWS if MAPBOX_ACCESS_TOKEN is missing outside TEST_MODE (stricter dependency on Mapbox than the clone cluster), but stop order is a naive lat-then-lng sort, not real nearest-neighbor/optimization, and there is no map visualization at all."},
+      "arm-06": {"score": 8, "flags": [], "note": "Real Mapbox Optimized-Trips v1 API call for stop ORDERING (documented endpoint/params, waypoint_index re-sort) with a deterministic nearest-neighbor fallback on any failure/over-limit; UI surfaces which optimizer ran (\"ordered by Mapbox\" vs nearest-neighbor). Geocoding itself is deterministic-dev only (no Mapbox geocoding), and there's no visual map component."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "domain/delivery.ts (geocodePackage, createDeliveryRoute — no ordering); app/(admin)/admin/delivery/routes/[routeId]/page.tsx (real Mapbox static image)",
+      "arm-04": "lib/routing/geocode.ts (Mapbox v6 + offline fallback); lib/routing/route-ordering.ts (orderStops, nearest-neighbor)",
+      "arm-06": "lib/routes/optimize.ts (orderStopsMapbox via optimized-trips v1); lib/customers/geocode.ts (deterministic-dev only)"
+    }
+  },
+  {
+    "id": "R-075",
+    "name": "Route administration (list/detail/reassign/print)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Single delivery-operations page merges route building, reassignment, and a live Mapbox static map on the route-detail view with reroute suggestions — no separate routes list page."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 5, "flags": [], "note": "Basic /admin/routes list (manual comma-separated package IDs) plus a detail page for magic links and reroute suggestions, but the reassign-driver control is missing from the UI despite reassignRoute existing in lib/routes/service.ts."},
+      "arm-04": {"score": 9, "flags": [], "note": "Full list + detail admin: driver reassignment with optimistic concurrency, magic-link issue/revoke, per-stop office-delivered overrides, and nearby reroute-onto-route with confirmation."},
+      "arm-05": {"score": 4, "flags": [], "note": "Single /admin/delivery page combines builder+list; no per-route detail view. reassignRoute exists as a backend action (app/api/admin/delivery/[routeId]/route.ts) but the UI never calls it — driver shown read-only. Print-route and print-cards links present on the list."},
+      "arm-06": {"score": 9, "flags": [], "note": "/admin/routes list + /admin/routes/[routeId] full detail: seq-ordered stops, reassign to sibling PLANNED routes, manager-confirmed reroute, manifest + greeting-card print links, and a readable route-event audit trail — the most complete route-admin surface."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/delivery/page.tsx; components/delivery-operations.tsx; app/(admin)/admin/delivery/routes/[routeId]/page.tsx",
+      "arm-04": "app/(admin)/admin/routes/[routeId]/page.tsx (driver assign, magic link, reroute confirm)",
+      "arm-06": "app/(admin)/admin/routes/[routeId]/page.tsx; app/(admin)/admin/routes/[routeId]/route-actions.tsx; lib/routes/builder.ts"
+    }
+  },
+  {
+    "id": "R-076",
+    "name": "Greeting cards print view per route",
+    "scores": {
+      "arm-01": {"score": 4, "flags": ["STUB"], "note": "renderArtifactPdf is the same generic text-line renderer used for every print artifact, grouped by fulfillment channel/filing group rather than by route, and cards only surface inline on the delivery-operations browser print — no dedicated per-route card PDF."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 5, "flags": ["STUB"], "note": "printRoute() genuinely generates a dedicated 5x7 card PDF per route (greetingPdfBase64), but no admin UI page ever surfaces or downloads it — a real feature that's completely unreachable by staff."},
+      "arm-04": {"score": 9, "flags": [], "note": "\"Print this run's cards\" link on the route-detail page renders through the fulfillment card artifact renderer scoped to the route's own packages — fully built and fully reachable."},
+      "arm-05": {"score": 5, "flags": [], "note": "Greeting cards are folded into the same routePrintDocument() as the driver manifest — just \"To {name}\" + greeting text lines, not a distinct card-stock layout/PDF."},
+      "arm-06": {"score": 8, "flags": [], "note": "renderRouteCardsPdf(): dedicated 6x4 card-sized PDF page per stop with a greeting, centered text layout, skips greetingless stops, and renders a placeholder page when a route has none."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-04": "lib/routing/route-print.ts (renderArtifact card layout, reachable via route-detail print link)",
+      "arm-01": "domain/print-batches.ts (renderArtifactPdf — generic renderer, no per-route grouping)",
+      "arm-03": "lib/routes/service.ts (printRoute — greetingPdfBase64 generated but never surfaced in UI)"
+    }
+  },
+  {
+    "id": "R-077",
+    "name": "Driver route list (messenger portal)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "/driver/routes/[token] magic-link portal (PIN gate, stop list) is genuinely functional; the logged-in /driver home page is a stale stub (\"Routes are not active yet\"); PIN lockout is 5 fails → 15-minute lock."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 6, "flags": [], "note": "/d/[token] magic-link portal is fully functional with PIN unlock and throttling, but the staff-authed /driver page repeats stale stub copy about routes landing in later phases."},
+      "arm-04": {"score": 9, "flags": [], "note": "Functional /driver staff home plus /drive/[token] magic-link app; PIN security is materially stronger — escalating lockout (10m→…→12h) with scrypt hashing, salting, and timing-safe comparison."},
+      "arm-05": {"score": 7, "flags": [], "note": "/driver/[token] page with PIN entry and stop list is present and functional; no separate informational driver home page."},
+      "arm-06": {"score": 9, "flags": [], "note": "/driver informational home + /drive/[token] full app; driver-link security is materially stronger — escalating PIN lockout (10m→20m→…→12h, permanent after 10 lockouts), HMAC-signed PIN cookie scoped to the link's own expiry."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/(driver)/driver/page.tsx (stale stub); app/(driver)/driver/routes/[token]/page.tsx",
+      "arm-04": "app/(driver)/driver/page.tsx; app/(driver)/drive/[token]/page.tsx; lib/routing/route-links.ts (escalating PIN lockout)",
+      "arm-06": "app/(driver)/driver/page.tsx; app/(driver)/drive/[token]/page.tsx; lib/routes/links.ts (escalating PIN lockout)"
+    }
+  },
+  {
+    "id": "R-078",
+    "name": "Driver stop cards + route start/delivery completion",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "components/driver-route.tsx: PIN entry, route start, per-stop Google Maps deep links, and Delivered taps — a complete driver flow backed by domain/delivery.ts (startDeliveryRoute, markStopDelivered)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": [], "note": "driver-client.tsx mirrors the same start→notify→deliver→complete flow via lib/routes/service.ts (startRouteViaMagicLink, markStopDelivered), with Google Maps links per stop."},
+      "arm-04": {"score": 8, "flags": [], "note": "/drive/[token] app: PIN gate, stop list with Google Maps links, and a delivered action backed by lib/routing/driver-session.ts's signed session cookie."},
+      "arm-05": {"score": 7, "flags": [], "note": "startDriverRoute/deliverDriverStop mirror the same start→notify→deliver→complete flow with maps links and delivered stamps; solid but slightly less UI polish."},
+      "arm-06": {"score": 9, "flags": [], "note": "drive-app.tsx: big-tap-target cards, \"already started\"/notified-count feedback on start, route-completion messaging, and an explicit greeting-card handoff reminder per stop — the most complete driver UX."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "components/driver-route.tsx; domain/delivery.ts (startDeliveryRoute, markStopDelivered)",
+      "arm-05": "lib/delivery.ts (startDriverRoute, deliverDriverStop); app/driver/[token]/page.tsx",
+      "arm-06": "app/(driver)/drive/[token]/drive-app.tsx; lib/routes/lifecycle.ts"
+    }
+  },
+  {
+    "id": "R-079",
+    "name": "Follow-up call center",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "No dedicated /follow-up page — a \"Follow-up call center\" section is folded into the bottom of /admin/delivery, with 3 real link-toggled filters (bulk delivery / unclaimed pickup / needs payment) each backed by a genuine distinct query and showing customer contact info; one list visible at a time rather than 3 parallel panels."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 2, "flags": ["STUB"], "note": "followUpQueue() (lib/pickup/bulk.ts) implements exactly the spec's 3 filters and is exposed via /api/admin/pickup, but no admin page anywhere calls it — confirmed by scanning every admin page.tsx; only reachable from a smoke-test script."},
+      "arm-04": {"score": 9, "flags": [], "note": "Dedicated /admin/follow-up page with FOLLOW_UP_REASONS covering unpaid / pickup_unclaimed / delivery_pending — the closest match to the spec's 3 canonical queues of any arm."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "No follow-up/call-center screen exists anywhere. Confirmed by grep (no matches for follow-up|followUp|call-center|unclaimed in lib/) and by arm-05's own AGGREGATE-REVIEW-P9.md, which independently flags this exact deliverable as missing (\"no call-center view, no follow-up filters, no R-079 wiring anywhere\"). Only a passing \"drafts waiting for follow-up\" stat exists in the operations dashboard."},
+      "arm-06": {"score": 7, "flags": [], "note": "/admin/follow-ups with reason filters, but the 3 reasons are payment / pickup / bulk-scheduled — \"bulk-scheduled\" substitutes for the spec's \"undelivered route stops\" category, so it's a close but not exact match to the 3 canonical queues."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-02",
+    "evidence": {
+      "arm-04": "app/(admin)/admin/follow-up/page.tsx; lib/scheduling/follow-up.ts (FOLLOW_UP_REASONS)",
+      "arm-01": "app/(admin)/admin/delivery/page.tsx (Follow-up call center section, ?followUp= toggle)",
+      "arm-03": "lib/pickup/bulk.ts (followUpQueue); app/api/admin/pickup/route.ts (no consuming UI page found)"
+    }
+  },
+  {
+    "id": "R-080",
+    "name": "Automated payment + pickup follow-up (cron)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "payment-reminders cron reminds every FINALIZED order with an open balance, deduped per order per calendar day via the idempotency key; a separate pickup-expiry cron stamps overdue ready pickups as expired and notifies."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": [], "note": "runPaymentReminderCron() reminds PLACED/PAID orders with UNPAID/PARTIAL status, day-deduped via idempotencyBase; runPickupExpiryCron() is a separate, correctly-scoped sweep — both logged to CronRunLog."},
+      "arm-04": {"score": 8, "flags": [], "note": "Configurable-cadence payment-reminder sweep keyed off a followUpDays setting, plus a separate pickup-expiry sweep — solid, though not clearly ahead of the clone cluster's own cadence logic."},
+      "arm-05": {"score": 4, "flags": [], "note": "sendPaymentReminders() is mis-scoped: it only reminds customers with a bulkDeliverySchedule whose order.paymentStatus === PENDING, missing general unpaid finalized orders entirely (a materially narrower cron than the name implies). Pickup expiry (expirePickupPackages) is a separate, correct sweep."},
+      "arm-06": {"score": 9, "flags": [], "note": "sweepPaymentReminders() with a configurable cadence (first reminder after initialAfterDays, then every intervalDays via lastPaymentReminderAt) plus a CronRun audit row per run; sweepPickupExpiry() runs a readiness sync before the expiry pass — most sophisticated cadence of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "app/api/cron/payment-reminders/route.ts; app/api/cron/pickup-expiry/route.ts",
+      "arm-05": "lib/delivery.ts (sendPaymentReminders — scoped to bulkDeliverySchedule only)",
+      "arm-06": "lib/payments/reminders.ts (sweepPaymentReminders); lib/pickup/readiness.ts (sweepPickupExpiry)"
+    }
+  },
+  {
+    "id": "R-081",
+    "name": "Shipment planning + bin packing",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "planShipment(): genuine first-fit-decreasing bin packing with real per-axis dimension checks and per-box running volume/weight capacity (not a scalar volume sum), plus a full carrier integration (quote/buy/void label, refresh tracking, validate address) — the most complete shipping stack of the six, though it hard-throws when nothing fits."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical bin-packing algorithm."},
+      "arm-03": {"score": 9, "flags": [], "note": "packItems(): real per-axis first-fit-decreasing bin packing with running volume/weight capacity per box, and gracefully reports unpackedItemIds instead of throwing when nothing fits."},
+      "arm-04": {"score": 3, "flags": ["THEATER"], "note": "planParcels() is a scalar volume/weight-sum selector — its own code comment admits \"Volume and weight, not a three-dimensional fit\" — with zero per-axis dimension checks; this is the exact flaw that disqualified arm-05 on this same item, directly contradicting the prior (wrong) grading of 8."},
+      "arm-05": {"score": 3, "flags": ["THEATER"], "note": "parcelForPackage() sums ALL product volumes into one scalar and picks the smallest PackageType whose box volume >= that sum — no per-axis dimension check, no multi-box split, exactly one ShipmentBox per package always. Arm-05's own AGGREGATE-REVIEW-P8.md independently confirms: \"'Bin packing' is a single-box volume-sum selection, not bin packing.\""},
+      "arm-06": {"score": 8, "flags": [], "note": "planParcels(): best-fit-decreasing multi-parcel packing (smallest-fitting-open-parcel search, 85% fill ratio) — arguably a better placement heuristic than first-fit — but throws a hard DomainRuleError on an item that fits no configured box instead of gracefully shipping it as its own parcel."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-01": "domain/shipping.ts (planShipment — per-axis FFD; buyPackageLabel/voidPackageLabel/refreshPackageTracking/validatePackageAddress)",
+      "arm-03": "lib/shipping/bin-packing.ts (packItems — per-axis FFD, graceful unpackedItemIds)",
+      "arm-04": "lib/shipping/bin-packing.ts (planParcels — self-documented scalar volume-sum, not per-axis)"
+    }
+  },
+  {
+    "id": "R-082",
+    "name": "Email hub (5-tab management)",
+    "scores": {
+      "arm-01": {"score": 3, "flags": ["STUB"], "note": "The real email hub is a single flat page with 3 stacked sections (new-campaign form, transactional templates, recent outbox) — no tabs at all, and no lists or subscribers management anywhere in the UI or API."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": [], "note": "Genuinely tabbed hub matching the spec's structure almost exactly — Campaigns, Subscribers, Lists, Templates, Triggered; campaigns fully functional, lists can be created, though subscribers/templates/triggered tabs are read-only display."},
+      "arm-04": {"score": 8, "flags": [], "note": "4-tab hub (Campaigns, Lists, Triggered, Outbox) backed by fully separate, fully-functional dedicated pages for each concern plus a branding-rich settings/email page — narrower tab count than 5 but deeper capability per tab."},
+      "arm-05": {"score": 2, "flags": ["MISSING", "STUB"], "note": "No hub exists — email is one <section> embedded inside the generic Settings <form>, with campaign create/send/test-send only. List creation, member management, and template editing all have backend support (lib/email.ts) but zero UI to invoke them."},
+      "arm-06": {"score": 9, "flags": [], "note": "/admin/email renders exactly the tabbed hub the spec describes and then some — Campaigns, Subscribers, Lists, Templates, Triggered, and a Send-log tab, each fully wired to its own API routes."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/email/page.tsx; components/email-hub.tsx (no tabs, 3 stacked sections)",
+      "arm-04": "app/(admin)/admin/email/page.tsx; app/(admin)/admin/email/email-tabs.tsx (4 tabs) + dedicated lists/templates/campaigns/settings pages",
+      "arm-06": "app/(admin)/admin/email/page.tsx; components/admin/email/email-tabs.tsx (6 tabs)"
+    }
+  },
+  {
+    "id": "R-083",
+    "name": "Campaign builder + send",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "Create draft, test-send, and send/re-run are wired, but there is no preview feature anywhere in the flow."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": [], "note": "Create draft, real preview_campaign render, test-send, and send are all wired in the UI end to end."},
+      "arm-04": {"score": 9, "flags": [], "note": "Dedicated campaign detail page: draft editor, live-render preview, test-send, and send/re-run with idempotent skip logic on repeat sends."},
+      "arm-05": {"score": 6, "flags": [], "note": "createCampaign/sendCampaign/testSendCampaign are functional (dedupeKey via skipDuplicates), but there is no preview feature and the builder form lives awkwardly inside the Settings <form>."},
+      "arm-06": {"score": 9, "flags": [], "note": "Dedicated /admin/email/campaigns/[id] page: draft editor, branding-accurate preview (renderCampaignPreview), test-send, send/re-run with a per-recipient status/attempts/lastError table — most complete lifecycle of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "components/email-hub.tsx (createCampaign, campaignAction — no preview)",
+      "arm-04": "app/(admin)/admin/email/campaigns/[campaignId]/page.tsx",
+      "arm-06": "app/(admin)/admin/email/campaigns/[id]/page.tsx; components/admin/email/campaign-editor.tsx; lib/email/campaigns.ts"
+    }
+  },
+  {
+    "id": "R-084",
+    "name": "Subscriber + mailing-list management",
+    "scores": {
+      "arm-01": {"score": 2, "flags": ["STUB"], "note": "No admin list/subscriber management exists at all — campaign creation only offers a dropdown of 3 hard-seeded lists (domain/messaging-configuration.ts); customer-facing self-service subscribe/preferences pages exist, but staff cannot create lists or manage members."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 5, "flags": [], "note": "Lists tab can create a list and view member counts, and Subscribers tab lists all subscribers read-only; add_list_members exists in the API but nothing in the UI calls it, so per-list membership editing is unreachable."},
+      "arm-04": {"score": 8, "flags": [], "note": "Lists page supports creating new lists and adding/removing members by email address — real, reachable CRUD."},
+      "arm-05": {"score": 2, "flags": ["STUB"], "note": "createEmailList/addSubscriberToEmailList exist in lib/email.ts and are exposed via /api/admin/email (create_list, add_list_member actions), but nothing in the UI calls them — lists render as a read-only comma-joined string in Settings."},
+      "arm-06": {"score": 9, "flags": [], "note": "Lists tab: create list, per-list member add/remove with an unsubscribed badge; Subscribers tab shows preference flags and list membership. Fully wired end to end."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "domain/messaging-configuration.ts (3 hard-seeded lists, no admin CRUD); app/(storefront)/newsletter/preferences/page.tsx (self-service only)",
+      "arm-04": "app/(admin)/admin/email/lists/page.tsx (create list + add/remove members by email)",
+      "arm-06": "components/admin/email/lists-tab.tsx; components/admin/email/subscribers-tab.tsx"
+    }
+  },
+  {
+    "id": "R-085",
+    "name": "Email templates + branding",
+    "scores": {
+      "arm-01": {"score": 4, "flags": [], "note": "Templates tab supports real per-template subject/body editing plus enable/disable and test-send, but branding in Settings > Email is just a single \"Sender name\" field — no reply-to, no footer, no from-address editor."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 2, "flags": ["STUB"], "note": "Templates tab is read-only display only (key/name/subject) with no edit form; upsert_template (which does accept a branding payload) exists in the API but is never called from the UI."},
+      "arm-04": {"score": 9, "flags": [], "note": "Templates page has full CRUD (subject/body, enable/disable, reset-to-shipped) AND Settings > Email has a genuinely complete branding editor — fromName, fromAddress, replyToAddress, logoUrl, accentColor, footerText — the only arm of the six with a real branding UI."},
+      "arm-05": {"score": 2, "flags": ["STUB"], "note": "updateEmailTemplate() (subject/body/branding) exists in lib/email.ts and is wired to /api/admin/email, but the Settings UI only ever displays templates read-only (\"<strong>{key}</strong> · {subject} · custom/default branding\") — no edit form for either subject/body or branding anywhere."},
+      "arm-06": {"score": 7, "flags": [], "note": "Templates tab is fully CRUD (create/edit subject+body, save) — better than the clone cluster's override-only model. However there is NO UI anywhere to edit branding (fromName/fromEmail/footerText) — getEmailBranding() only reads a seeded setting; Settings > Email only shows delivery mode + a test sender, not branding fields."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-02",
+    "evidence": {
+      "arm-04": "app/(admin)/admin/email/templates/page.tsx (full CRUD); app/(admin)/admin/settings/email/page.tsx (fromName/fromAddress/replyToAddress/logoUrl/accentColor/footerText)",
+      "arm-01": "components/email-hub.tsx (TemplatesTab); components/settings-hub.tsx (Sender name only)",
+      "arm-03": "components/admin/email-hub.tsx (TemplatesTab — read-only display, no edit form)"
+    }
+  },
+  {
+    "id": "R-086",
+    "name": "Triggered/transactional emails + overrides + idempotency",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "Templates are edited directly as DB rows (no separate coded-default/override layering) with an isEnabled gate; enqueueTransactionalEmail dedupes via a caller-supplied idempotency key — functional but architecturally simpler than a default+override model."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 5, "flags": [], "note": "TRIGGERED_KEYS registry with a real set_triggered override endpoint (subject/body/enabled) exists in the backend, but the Triggered tab only ever displays read-only defaults — staff can never actually toggle an override."},
+      "arm-04": {"score": 9, "flags": [], "note": "TRIGGERED_DEFAULTS registry with a fully-wired Templates/Triggered UI: enable/disable, subject override, and body override, all reachable and saved."},
+      "arm-05": {"score": 6, "flags": [], "note": "defaultTemplates registry + templateFor()/updateEmailTemplate() (per-key override, backend-only) + dedupeKey-based idempotent queueing (queueEmail upsert on dedupeKey). Functionally present but the override path has no UI (see R-085)."},
+      "arm-06": {"score": 9, "flags": [], "note": "TRIGGERED_DEFAULTS registry (order_confirmation/payment_link/refund_issued/subscription_manage) with a fully-wired Triggered tab: enable/disable, subject override, body override, AND link-a-saved-template override, with a documented resolution order (override > linked template > coded default)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "domain/messaging-templates.ts (enqueueTransactionalEmail); domain/messaging-configuration.ts (defaultTemplates, edited directly)",
+      "arm-04": "lib/email/templates.ts (TRIGGERED_DEFAULTS); app/(admin)/admin/email/templates/page.tsx (enable/disable + overrides)",
+      "arm-06": "lib/email/triggered.ts (TRIGGERED_DEFAULTS, enqueueTriggeredEmail); components/admin/email/triggered-tab.tsx"
+    }
+  },
+  {
+    "id": "R-087",
+    "name": "Order lifecycle emails (confirmation/payment link/refund)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Order confirmation is enqueued inside finalizeOrder's own transaction; refund email dedupes on payment.id + cumulative refunded cents (correctly distinguishes partial refunds); payment-link email is sent only by the daily cron sweep, not triggered at checkout time."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": [], "note": "enqueueOrderConfirmation/enqueuePaymentLinkEmail/enqueueRefundEmail are called from checkout/session.ts, payments/offline.ts, payments/webhook.ts, and ops/refunds.ts — 4 real call sites, each dedupe-keyed."},
+      "arm-04": {"score": 9, "flags": [], "note": "queueOrderConfirmation/queuePaymentLink/queueRefundNotice each have a distinct, well-chosen dedupe key (order id, checkout-session id, refund id) and are called from order-service.ts, checkout-service.ts, offline-payments.ts, AND webhook-service.ts — the most call sites and the cleanest dedupe-key design of the six."},
+      "arm-05": {"score": 7, "flags": [], "note": "queueOrderLifecycleEmail() correctly called at all 3 real call sites (checkout finalize → ORDER_CONFIRMATION, unpaid checkout → PAYMENT_LINK, Stripe refund webhook → REFUND), each with a dedupeKey guarding re-delivery."},
+      "arm-06": {"score": 8, "flags": [], "note": "enqueueOrderConfirmationTx/enqueueRefundEmailTx run inside the causing transaction; payment-link is a deliberate staff action (sendPaymentLinkEmail) rather than automatic-on-finalize, guarded by an outstanding-balance check and audited."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-04": "lib/email/transactional.ts (queueOrderConfirmation, queuePaymentLink, queueRefundNotice); call sites in order-service.ts, checkout-service.ts, offline-payments.ts, webhook-service.ts",
+      "arm-03": "lib/email/order-emails.ts (enqueueOrderConfirmation, enqueuePaymentLinkEmail, enqueueRefundEmail); call sites in checkout/session.ts, payments/offline.ts, payments/webhook.ts, ops/refunds.ts",
+      "arm-01": "domain/checkout.ts (order-confirmation enqueued in tx); domain/billing-notifications.ts (enqueueRefundEmail, sendPaymentReminders)"
+    }
+  },
+  {
+    "id": "R-088",
+    "name": "Transactional outbox + retrying sweeper",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "sweepMessageOutbox: idempotent enqueueMessage upsert, row-locked claimMessages with stale-claim reclaim, and a backoff schedule up to 3 attempts."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 9, "flags": [], "note": "lib/notify/outbox.ts: transactional claims, explicit state machine, exponential backoff up to 5 attempts, full audit logging, and combined email+SMS dispatch in one sweep."},
+      "arm-04": {"score": 9, "flags": [], "note": "sweepNotificationOutbox: transactional claimDueMessages, 5-attempt exponential backoff, and detailed audit trail (recordSent/recordFailure/recordTerminal) including graceful blocking when no sender is configured."},
+      "arm-05": {"score": 7, "flags": [], "note": "sweepEmailOutbox(): claim via updateMany on status=PENDING, stale PROCESSING reclaim after 10 minutes, fixed-delay retry (attemptCount * 60s) up to MAX_OUTBOX_ATTEMPTS=3, EmailLog row per outcome. Solid, marginally less backoff sophistication than the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "sweepOutbox() shares one claim/deliver module (lib/email/claim-deliver.ts) with the campaign send loop and test-sends, records a CronRun audit row per sweep, and deliberately excludes campaign-recipient and test-send kinds from auto-retry (an explicit, documented policy the other arms don't have)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-03",
+    "evidence": {
+      "arm-01": "domain/messaging-outbox.ts (claimMessages, recordFailedDelivery)",
+      "arm-03": "lib/notify/outbox.ts (transactional claims, 5-attempt backoff, email+SMS dispatch)",
+      "arm-06": "lib/email/outbox-sweep.ts (sweepOutbox); lib/email/claim-deliver.ts"
+    }
+  },
+  {
+    "id": "R-089",
+    "name": "Email campaign lifecycle UI (draft/sent lists)",
+    "scores": {
+      "arm-01": {"score": 5, "flags": [], "note": "The flat campaign section lists name/status with Test/Send buttons, but there's no preview and no per-campaign recipient-level detail — only a generic recent-outbox table underneath."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 7, "flags": [], "note": "Campaigns tab lists drafts/sent with status, supports selecting a campaign to preview/test-send/send, though there's no dedicated per-recipient detail table."},
+      "arm-04": {"score": 8, "flags": [], "note": "Dedicated campaign detail page tracks draft/sent lifecycle with idempotent re-send, and the separate Outbox page gives message-level status/attempts/error visibility."},
+      "arm-05": {"score": 5, "flags": [], "note": "Campaign list with name/subject/status and test-send/send buttons exists, but it's embedded inside the Settings <form> (mixed submit-context, self-flagged in arm-05's own AGGREGATE-REVIEW-P11.md) with no preview and no per-recipient detail."},
+      "arm-06": {"score": 9, "flags": [], "note": "Campaigns tab (list with status/recipient-count/sentAt/lastError) links to a full campaign detail page with a per-recipient status/attempts/providerId/lastError table — most complete lifecycle visibility of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "components/email-hub.tsx (campaign list section, no preview)",
+      "arm-04": "app/(admin)/admin/email/campaigns/[campaignId]/page.tsx; app/(admin)/admin/email/outbox/page.tsx",
+      "arm-06": "components/admin/email/campaigns-tab.tsx; app/(admin)/admin/email/campaigns/[id]/page.tsx"
+    }
+  },
+  {
+    "id": "R-090",
+    "name": "Email test sender",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "Settings > Email \"Send test\" POSTs a transactional test through the normal enqueue path and reports only \"Email test queued\" — it's queued, not a synchronous delivery confirmation."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical."},
+      "arm-03": {"score": 8, "flags": [], "note": "test_email action calls sendTestEmail() synchronously and returns a real captured/providerId outcome in the same request — matches the spec's \"right now\" intent."},
+      "arm-04": {"score": 8, "flags": [], "note": "Settings > Email test form posts to a dedicated email-test endpoint that runs through the real dispatch path and reports the outcome directly."},
+      "arm-05": {"score": 7, "flags": [], "note": "sendTestEmail() queues an EMAIL_PLATFORM_TEST row through the same outbox/sweep path and the UI reports \"captured\" vs \"sent\" — solid, though indirect (queued, not synchronous) compared to the other two arms."},
+      "arm-06": {"score": 9, "flags": [], "note": "Settings > Email test form calls /api/admin/settings/email-test, which sends through the REAL dispatch path synchronously and reports delivered + providerId, or the exact error — the most direct/honest test-send of the six."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {
+      "arm-01": "components/settings-hub.tsx (sendEmailTest — queues, reports \"queued\" only)",
+      "arm-04": "app/(admin)/admin/settings/email/page.tsx (sendTestEmailAction, dedicated email-test endpoint)",
+      "arm-06": "app/(admin)/admin/settings/settings-tabs.tsx (email-test-form); app/api/admin/settings/email-test/route.ts"
+    }
+  }
+]

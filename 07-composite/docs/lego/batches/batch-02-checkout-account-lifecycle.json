@@ -1,0 +1,257 @@
+[
+  {
+    "id": "R-032",
+    "name": "Fulfillment/shipping selection + rate resolution + rules",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "computeFees() covers pickup/bulk(per-destination)/per-package(per-recipient, hard zip block, Purim day)/shipping(live margin engine); quoteShipping() bin-packs, quotes Shippo, runs resolveMargin() (charge highest carrier-best, buy cheapest), persists ShippingQuote+options for reconciliation. Money fails closed when no live rate. Unit-tested in tests/checkout-fees.test.ts."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 (lib/checkout/fees.ts, lib/shipping/margin.ts, lib/shipping/quotes.ts)."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "fees.ts and margin.ts diff from arm-02 by a trailing newline only \u2014 functionally identical, same rule matrix and margin engine."},
+      "arm-05": {"score": 6, "flags": [], "note": "Real margin engine (selectMarginRate, quoteCheckoutShipping) with box-fit selection and per-carrier margin capture; checkout.ts enforces zip block + Purim-day requirement server-side. But no live per-recipient rate preview before submit \u2014 UI literally says 'Delivery fees are calculated when checkout begins,' and blocked/zip-ineligible methods aren't visually disabled in the picker."},
+      "arm-06": {"score": 9, "flags": [], "note": "Same fee-matrix logic as the clone cluster (fees.ts/margin.ts are line-for-line identical) plus live per-recipient Shippo quotes rendered inline in the fulfillment dropdown before submit (quoteCheckoutShipping at page load), with per-option disabled state for blocked zips/unavailable shipping."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/checkout/fees.ts; lib/shipping/margin.ts; lib/shipping/quotes.ts", "arm-05": "lib/checkout.ts; lib/shipping.ts", "arm-06": "lib/checkout/fees.ts; lib/shipping/margin.ts; app/(storefront)/checkout/page.tsx"}
+  },
+  {
+    "id": "R-033",
+    "name": "Card + offline checkout",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Hosted Stripe Checkout session (app/api/checkout/route.ts) for card; staff-only CASH/CHECK/COMP posting via postPayment()/lib/payments/post-payment.ts with Zod-enforced method enum, audit trail, and void (never voided for STRIPE, only refunded). Matches the duel's own build-plan resolution: offline payment is a server-enforced staff-only policy (R-127), not a customer-facing toggle."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Checkout route and payment-posting logic identical to arm-01/02/03; arm-04's unique files don't touch this path."},
+      "arm-05": {"score": 7, "flags": [], "note": "Hosted Stripe via hand-rolled REST calls (no SDK) plus postOfflinePayment/createPosOrder/voidOfflinePayment/refundStripePayment, gated by wireFormat.source==='POS'. Functional and reasonably complete but the payment-status model is binary (POSTED/VOIDED only, no PARTIAL) \u2014 a partial cash payment reads identically to a full one."},
+      "arm-06": {"score": 9, "flags": [], "note": "postPaymentTx/voidPaymentTx with a proper PARTIAL/PAID/OVERPAID/UNPAID recompute; POS cash/check UI is folded into the same CheckoutForm component used by the storefront (one code path, staff-gated), with graceful 503 handling when Stripe keys aren't configured."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/checkout/route.ts; lib/payments/post-payment.ts; app/api/admin/orders/[id]/payments/route.ts", "arm-05": "lib/checkout.ts (postOfflinePayment, createPosOrder)", "arm-06": "lib/payments/post.ts; lib/checkout/pos.ts"}
+  },
+  {
+    "id": "R-034",
+    "name": "Checkout stock + price validation",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "createOrderFromCart() re-derives priced cart, recipients, fees fresh from the DB every call; any line issue or expectedTotalCents mismatch returns a structured conflict (never creates an order on stale data); guest-vs-registered-email collision guarded (SR-07)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical logic; unique arm-04 files don't touch this path."},
+      "arm-05": {"score": 7, "flags": [], "note": "assertLiveOrder() re-checks price and stock per line and throws a specific message per failure, and totals are compared against the stored subtotal \u2014 correct, but conflicts surface as a single thrown string rather than a structured price/stock report, so the client can't render itemized diffs."},
+      "arm-06": {"score": 9, "flags": [], "note": "repriceAndCheckStock() returns a structured report (priceConflicts[] + stockIssues[] with requested/available counts), backorder-aware, option/add-on aware; the checkout UI renders both lists distinctly on a 409."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/checkout/create-order.ts", "arm-05": "lib/checkout.ts (assertLiveOrder)", "arm-06": "lib/checkout/validate.ts"}
+  },
+  {
+    "id": "R-035",
+    "name": "Checkout success experience",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Dedicated /checkout/success page: looks up the order by draftReference, shows a distinct 'still confirming' state if the webhook hasn't landed yet vs. the finalized/paid state, and clears the guest draft cookie via HMAC-verified token match only once the draft is COMPLETED."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical file; unaffected by arm-04's unique changes."},
+      "arm-05": {"score": 2, "flags": ["BROKEN", "STUB"], "note": "createProviderCheckout() sets Stripe's success_url to /checkout/success, but no such route exists anywhere in the app (only /checkout/local, a dev-only harness that never talks to real Stripe). A real customer completing a live Stripe payment is redirected to a 404. Success state is untested and unreachable in production configuration."},
+      "arm-06": {"score": 9, "flags": [], "note": "Success/still-processing/discarded states are all rendered inline on the same /checkout page keyed off order.status and a paid=1 query flag, with the guest draft cookie cleared exactly once on the FINALIZED branch \u2014 functionally equivalent design, no separate route needed."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/checkout/success/page.tsx", "arm-05": "lib/checkout.ts (createProviderCheckout success_url); app/checkout/local/page.tsx", "arm-06": "app/(storefront)/checkout/page.tsx"}
+  },
+  {
+    "id": "R-036",
+    "name": "Payment recalculation on order changes",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "recalcPaymentStatus() sums POSTED payments vs order total inside the same transaction as every post/void/refund, producing UNPAID/PARTIAL/PAID/COMPED \u2014 the cache can never drift from the ledger. Only triggered on payment-row writes, not on hypothetical post-finalize line edits (none exist in this build)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical logic; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 5, "flags": [], "note": "Status is set inline at each payment/void/refund call site (paymentStatus: activePayments ? 'POSTED' : 'VOIDED') rather than through one shared recompute function, and the PaymentStatus enum itself has no PARTIAL \u2014 a partial payment and a full payment both read POSTED. Real but materially less correct than the other arms."},
+      "arm-06": {"score": 9, "flags": [], "note": "recomputePaymentStatus()/classifyPaymentStatus() sum POSTED payments vs total inside the same transaction as post/void, and add an OVERPAID state beyond the clone cluster's UNPAID/PARTIAL/PAID/COMPED set; a standalone recalculatePaymentStatus() export exists for any external caller."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/domain/payment-status.ts; lib/payments/post-payment.ts", "arm-05": "lib/checkout.ts (postOfflinePayment/voidOfflinePayment/refundStripePayment)", "arm-06": "lib/payments/post.ts (recomputePaymentStatus, classifyPaymentStatus)"}
+  },
+  {
+    "id": "R-037",
+    "name": "Checkout recipient/donation summary + per-recipient delivery + bulk + live shipping + guest email + conflict/price UI",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "CheckoutForm shows per-item summary, per-recipient fulfillment radio group (with disabled+titled out-of-zone options), Purim-day picker, per-recipient + order-default greeting, donation input, live-refetched quote (items/fees/total) on any choice change, and a structured conflict banner with an 'Adjust my order' link on 409. Guest contact (name+email) captured inline when unauthenticated."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "checkout-form.tsx diffs from arm-02 by a trailing newline only \u2014 functionally identical component."},
+      "arm-05": {"score": 4, "flags": [], "note": "CheckoutFlow shows per-recipient fulfillment select + greeting + donation + a running total, but no live fee breakdown before submit (fees only appear after the POST), no explicit bulk-vs-per-package fee display, no guest email field anywhere in the flow (guests are created as bare 'Guest Checkout' customer rows with no email captured at all), and conflicts on failure surface as one flat message string, not itemized."},
+      "arm-06": {"score": 9, "flags": [], "note": "CheckoutForm mirrors the clone cluster's summary/greeting/donation UI, adds live per-recipient Shippo quotes inline in the fulfillment dropdown, a structured conflict panel (separate price-conflict and stock-issue lists) with a reload action, and graceful 'card unavailable' messaging distinct from a hard error. Guest email is captured up front at draft-save time (findOrCreateGuestCustomer), carried through to checkout."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/checkout/checkout-form.tsx", "arm-05": "app/components/checkout-flow.tsx; lib/order-builder.ts (createGuestCustomer)", "arm-06": "app/(storefront)/checkout/checkout-form.tsx; lib/customers/dedupe.ts"}
+  },
+  {
+    "id": "R-038",
+    "name": "Account dashboard + auth-gated nav",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "AccountLayout does a server-side redirect('/signin') for any unauthenticated request before rendering; dashboard shows active-draft card, 3 most recent orders, and address-book count, each linking to its own subpage nav (Dashboard/Orders/Addresses/Profile)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical layout/dashboard; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 4, "flags": [], "note": "'/account' page renders unconditionally server-side and defers the auth check to a client fetch of /api/account; an unauthenticated visitor sees an inline 'Sign in to view your account' message instead of being redirected, and there is no sub-nav at all \u2014 profile/addresses/orders are all flattened into one dashboard component with no distinct routes to gate."},
+      "arm-06": {"score": 9, "flags": [], "note": "AccountLayout calls requireCustomer() server-side (redirects/throws before any data loads) and renders a real 4-link nav (Dashboard/Orders/Addresses/Profile) plus sign-out, shared across every account subpage."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/layout.tsx; app/(storefront)/account/page.tsx", "arm-05": "app/account/page.tsx; app/api/account/route.ts", "arm-06": "app/(storefront)/account/layout.tsx"}
+  },
+  {
+    "id": "R-039",
+    "name": "Customer order history + detail",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "account/orders lists every non-discarded order with status badge/total/repeat link; account/orders/[id] shows full package/line/recipient/greeting breakdown, 404s identically for a foreign or bad id (no probing signal)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical pages; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 3, "flags": ["MISSING"], "note": "AccountDashboard lists orders (ref, item count, total, status) but there is no order-detail route anywhere in app/ \u2014 no line items, no recipient/address breakdown, no per-order page at all. History exists; detail does not."},
+      "arm-06": {"score": 9, "flags": [], "note": "account/orders lists history; account/orders/[id] shows full recipient-grouped line/greeting/total breakdown plus an 'unassigned' section, ownership-checked via notFound() on any mismatch."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/orders/page.tsx; app/(storefront)/account/orders/[id]/page.tsx", "arm-05": "app/components/account-dashboard.tsx (no detail route)", "arm-06": "app/(storefront)/account/orders/[id]/page.tsx"}
+  },
+  {
+    "id": "R-040",
+    "name": "Continue/pay/cancel a draft",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "DraftActions renders Continue building (\u2192/order), Pay (\u2192/checkout, hidden until every line is assigned), and Cancel draft (confirm() + DELETE /api/draft) \u2014 all three actions wired end-to-end and tested via data-testid hooks."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical component; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 3, "flags": ["MISSING", "STUB"], "note": "The account dashboard shows only a 'Continue or cancel' link that routes to /order (the builder) \u2014 there is no distinct pay action from the dashboard, and no cancel/discard is reachable anywhere: discardOrder() in lib/orders.ts is fully implemented and unit-tested but has zero callers in app/ or api/, and the draft route (app/api/order/drafts/[draftId]/route.ts) exposes only GET/PUT, no DELETE."},
+      "arm-06": {"score": 9, "flags": [], "note": "Order detail page renders Continue editing (\u2192/order?draft=), Go to checkout, and a CancelDraftButton, all draft-status-gated; cancelDraft() releases any stock reservation and flips the order to DISCARDED through the same state machine as R-046."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/account/draft-actions.tsx; app/api/draft/route.ts", "arm-05": "app/components/account-dashboard.tsx; lib/orders.ts (discardOrder, uncalled)", "arm-06": "app/(storefront)/account/orders/[id]/cancel-draft-button.tsx; lib/orders/drafts.ts (cancelDraft)"}
+  },
+  {
+    "id": "R-041",
+    "name": "Repeat a prior customer order",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "repeat.ts builds a full RepeatPlan per line (same/replacement/unmapped with price-smart fallback candidates), carries active options/add-ons only when the same product is kept, flags invalid recipient snapshots, and appends into the customer's existing draft without clobbering in-progress work; UI is a dedicated review page + repeat-review.tsx."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical repeat engine and review UI; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 7, "flags": [], "note": "createRepeatDraft() walks the replacement chain per line (BFS across ProductReplacement edges), price-sorts candidates, and creates a new draft order seeded with per-line candidate lists; a dedicated /repeat/[draftId] review page exists. Solid, though the candidate BFS re-queries the DB per line rather than a single catalog fetch like the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "buildRepeatPlan()/RepeatReview page mirrors the clone cluster's design (chain-resolved vs. price-smart mapping, per-recipient confirmation before anything becomes a draft), reachable from both the order-detail page and the account dashboard."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/repeat.ts; components/account/repeat-review.tsx", "arm-05": "lib/repeat-orders.ts; app/repeat/[draftId]/page.tsx", "arm-06": "lib/repeat/plan.ts; lib/repeat/chain.ts; app/(storefront)/account/orders/[id]/repeat/page.tsx"}
+  },
+  {
+    "id": "R-042",
+    "name": "Customer profile management (ownership-enforced)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "ProfileForm PATCHes /api/account/profile; the route reads the customer only from the session (no id ever comes from the request), updates name/phone with dedupe-safe P2002 handling on phoneNormalized."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical form/route; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "The account dashboard's 'Profile' card is read-only text ('Add your email during checkout') with no edit form; /api/account exposes GET only \u2014 there is no PATCH/PUT anywhere in the app for updating a customer's own name/email/phone. Genuinely absent, not just under-linked."},
+      "arm-06": {"score": 9, "flags": [], "note": "ProfileForm + profile route update the session customer's own row only (no id parameter to abuse), matching the clone cluster's design 1:1."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/profile/page.tsx; app/api/account/profile/route.ts", "arm-05": "app/components/account-dashboard.tsx; app/api/account/route.ts (GET only)", "arm-06": "app/(storefront)/account/profile/page.tsx; app/(storefront)/account/profile/profile-form.tsx"}
+  },
+  {
+    "id": "R-043",
+    "name": "Saved-address account view",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "account/addresses renders the full address book via AddressesManager (add/edit/delete, not just a view), sourced from getCustomerAddressBook(customer.id)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical page/component; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 6, "flags": [], "note": "The account dashboard lists saved addresses (name + full address) read-only \u2014 satisfies 'view' literally, and an address-update endpoint exists (app/api/addresses/[addressId]/route.ts) even though the account page doesn't surface an edit affordance for it."},
+      "arm-06": {"score": 8, "flags": [], "note": "account/addresses + address-book.tsx render the saved book with add/edit/delete, on par with the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/addresses/page.tsx; components/account/addresses-manager.tsx", "arm-05": "app/components/account-dashboard.tsx; app/api/addresses/[addressId]/route.ts", "arm-06": "app/(storefront)/account/addresses/page.tsx; app/(storefront)/account/addresses/address-book.tsx"}
+  },
+  {
+    "id": "R-044",
+    "name": "Order status state machine + transitions",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "ALLOWED_TRANSITIONS map (DRAFT\u2192FINALIZED|DISCARDED, both terminal) with canTransition/assertTransition, unit-tested for every legal/illegal pair including self-transitions; consumed by both finalizeOrder and discardOrder via a guarded updateMany so a concurrent second transition is a no-op count, never a clobber."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical state machine; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 6, "flags": [], "note": "assertOrderTransition() with the same DRAFT\u2192{FINALIZED,DISCARDED} map, version-guarded updateMany, and real unit + DB-backed concurrency tests (race finalize vs. discard). Correct and tested, but finalizeOrder()/discardOrder() in lib/orders.ts are never called from any route \u2014 the live webhook path (completeCheckout) reimplements finalize inline instead of calling this module, so the 'shared' state machine is partially duplicated/dead code in production paths."},
+      "arm-06": {"score": 9, "flags": [], "note": "Same ORDER_TRANSITIONS map + IllegalTransitionError/OrderConcurrencyError, and finalizeOrderTx is the one real implementation called from both the webhook and POS paths (no duplication)."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/domain/order-state.ts; tests/order-state.test.ts", "arm-05": "lib/orders.ts; tests/domain-core.test.ts", "arm-06": "lib/orders/state-machine.ts; scripts/test-state-machine.mts"}
+  },
+  {
+    "id": "R-045",
+    "name": "Order finalization (draft \u2192 placed, claims number)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "finalizeOrder() flips status in a guarded transaction, reserves aggregated tracked inventory (throwing/rolling back the whole finalize on shortfall), claims a per-season sequential number via a single atomic UPDATE...RETURNING, folds lines into packages with an advisory-lock-protected find-or-create, and enqueues lifecycle emails in the same transaction."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical finalize path; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 7, "flags": [], "note": "The real, reachable finalize path lives inline in completeCheckout() (webhook handler): season row locked FOR UPDATE, sequential nextOrderNumber claimed, stock reserved per line, payment posted, package materialization triggered \u2014 all in one transaction. Correct and reachable, but duplicates lib/orders.ts's separate (unused) finalizeOrder(), so the 'real' finalize logic isn't the unit-tested one."},
+      "arm-06": {"score": 9, "flags": [], "note": "finalizeOrderTx() claims the order number, flips status with a guarded updateMany, materializes packages, and enqueues the confirmation email all in one transaction; it is the single implementation called from both the checkout webhook (commitSubmittedOrder) and the POS finalize path \u2014 no duplication."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/domain/finalize.ts; lib/domain/order-numbers.ts", "arm-05": "lib/checkout.ts (completeCheckout); lib/orders.ts (unused finalizeOrder)", "arm-06": "lib/orders/state-machine.ts (finalizeOrderTx); lib/checkout/finalize.ts"}
+  },
+  {
+    "id": "R-046",
+    "name": "Draft discard",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "discardOrder() uses the same guarded-transition pattern as finalize, is unit-tested for illegal transitions and concurrent-race outcomes, and is wired end-to-end from the account UI's Cancel draft button through DELETE /api/draft."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical discard path; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 2, "flags": ["STUB", "MISSING"], "note": "discardOrder() in lib/orders.ts is correct and covered by real DB-backed concurrency tests (finalize-vs-discard race), but it has zero callers anywhere in app/ or api/ \u2014 no route, no UI action reaches it. A customer literally cannot discard a draft in this build; the dashboard's 'Continue or cancel' link only routes to the builder page, which has no cancel affordance either. Well-tested dead code, not a working feature."},
+      "arm-06": {"score": 9, "flags": [], "note": "cancelDraft() releases any stock reservation and flips DRAFT\u2192DISCARDED through the shared state machine, wired to CancelDraftButton on the order-detail page and exercised end-to-end."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/domain/finalize.ts (discardOrder); components/account/draft-actions.tsx", "arm-05": "lib/orders.ts (discardOrder, uncalled); tests/domain-core.test.ts", "arm-06": "lib/orders/drafts.ts (cancelDraft); app/(storefront)/account/orders/[id]/cancel-draft-button.tsx"}
+  },
+  {
+    "id": "R-047",
+    "name": "Draft reference numbers + wire format",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "newDraftReference() generates an unambiguous-alphabet code (D-XXXXXXXX, no 0/O/1/I \u2014 phone-safe); wireFormat() renders 'TOMCHEI D-XXXXXXXX' as the string a customer quotes on a bank transfer so staff can match payment to draft. Shown to the customer directly on the order-detail page for DRAFT orders."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Identical reference/wire-format helpers; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 4, "flags": [], "note": "draftReference is a real unique code (DRAFT-<hex>/REPEAT-<hex>), but there is no customer-facing 'wire format' payment-reference concept at all \u2014 the schema field named wireFormat is repurposed as a generic JSON blob storing the draft's cart/checkout state, unrelated to a bank-transfer reference string. Half the requirement (reference numbers) is solid; the other half (a wire format customers actually use to pay) doesn't exist."},
+      "arm-06": {"score": 8, "flags": [], "note": "claimDraftRef()/claimOrderNumber() are atomic per-season sequential claims; formatWireFormat() renders 'MM-<Season>-0042' as the printed order label used on paperwork/receipts \u2014 a different but equally coherent interpretation of 'wire format' (packing-slip label rather than bank-transfer reference), fully wired into finalize and shown on the order-detail page."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/domain/draft-reference.ts", "arm-05": "lib/order-builder.ts (draftReference literal); prisma/schema.prisma (wireFormat Json misc-use)", "arm-06": "lib/orders/numbers.ts (formatWireFormat, claimDraftRef)"}
+  },
+  {
+    "id": "R-048",
+    "name": "Cross-season product replacement chain",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "resolveReplacementChain() walks Product.replacementId hop by hop with a visited-set cycle guard and a max-hop cap, landing on the first ACTIVE product in the target season; wouldCreateReplacementCycle() protects the admin editor from creating a loop in the first place; feeds both customer repeat and staff auto-repeat."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Identical chain-walk logic; unaffected by arm-04's unique files."},
+      "arm-05": {"score": 7, "flags": [], "note": "replacementCandidates() does a BFS over ProductReplacement edges (source\u2192target), visited-set guarded, collecting every reachable ACTIVE product in the target season and sorting by price proximity \u2014 correct and arguably more thorough (multiple candidates, not just the first hit) than a single-path walk, though it re-queries the DB per BFS level rather than a preloaded catalog map."},
+      "arm-06": {"score": 9, "flags": [], "note": "resolveReplacementChain() walks Product.replacedById with a visited set and max-hop cap, distinguishing a genuine dead end from an active landing; replacementChainPreview() renders the full 'Old \u2192 Mid \u2192 New' chain for the admin product page."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/repeat.ts (resolveReplacementChain, wouldCreateReplacementCycle)", "arm-05": "lib/repeat-orders.ts (replacementCandidates)", "arm-06": "lib/repeat/chain.ts (resolveReplacementChain, replacementChainPreview)"}
+  }
+]

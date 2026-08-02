@@ -1,0 +1,1488 @@
+[
+  {
+    "id": "R-137",
+    "name": "Normalized relational app schema (Postgres/Prisma)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "1081-line schema, cuid PKs, real FKs, sensible indexes, staff/customer separation. Solid 3NF-ish design with intentional snapshot denormalization (order lines) documented in comments."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical schema.prisma to arm-01 (confirmed diff -q)."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical schema.prisma to arm-01 (confirmed diff -q)."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical schema.prisma to arm-01 (confirmed diff -q)."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "838-line reduced schema. Uses Decimal(8,2) for dims/weight (arguably more correct than clone's Float) and adds a PackageLine join table between Package/OrderLine. Loses several supporting tables (no legacy-import entity, no ConcurrencyFixture, no dedicated CheckoutSession-to-refund plumbing depth)."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "1312-line independent schema with @@map snake_case tables, richer enum granularity, unified ImportBatch (regular+legacy), ReconciliationRun/Finding, and explicit self-referential OrderLine add-on tree. Most complete and most annotated of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:1-1082",
+      "arm-05": "prisma/schema.prisma:1-839",
+      "arm-06": "prisma/schema.prisma:1-1313"
+    }
+  },
+  {
+    "id": "R-138",
+    "name": "DB-enforced lifecycle + category enums",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "~20 Postgres enums (SeasonStatus, ProductKind, OrderStatus, PackageStage, PaymentMethod/State, RouteStatus, NewsletterStatus, LegacyImportStatus, etc.), all Prisma enum -> Postgres ENUM type."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical schema."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical schema."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical schema."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "~12 enums covering the same core lifecycles (PackageStatus adds UNCLAIMED, PaymentStatus adds REFUNDED at order level) but fewer granular status enums overall (e.g. no dedicated webhook/legacy-import status enums)."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "~24 enums with finer lifecycle granularity: ImportKind/ImportStatus, CronRunStatus, ReconciliationRunStatus/FindingKind, EmailRecipientStatus, StaffStatus adds PENDING for invite flow. Most thorough enum coverage."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:10-24,156-159,183-187,288-299",
+      "arm-06": "prisma/schema.prisma:10-129"
+    }
+  },
+  {
+    "id": "R-139",
+    "name": "Inventory-target integrity (XOR CHECK) constraints",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Real CHECK constraint in migration SQL: ALTER TABLE InventoryItem ADD CONSTRAINT InventoryItem_target_xor CHECK ((productId IS NULL) <> (addOnId IS NULL)). Cannot be expressed in Prisma schema directly, correctly hand-added to migration.sql."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical migration SQL."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical migration SQL."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical migration SQL."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "Equivalent CHECK: ALTER TABLE InventoryItem ADD CONSTRAINT InventoryItem_exactly_one_target CHECK ((productId IS NULL) <> (productAddOnId IS NULL)). Same rigor."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Has the inventory XOR CHECK plus two more: order_lines_line_kind CHECK (product-line vs add-on-line integrity) and shipping_quotes_target_xor CHECK. Broader application of the same discipline beyond just inventory, verified by a dedicated live-DB regression test (scripts/test-constraints.mts) that INSERTs violating rows and asserts rejection."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/migrations/20260720180500_p2_domain_core/migration.sql",
+      "arm-05": "prisma/migrations/20260727172758_p2_domain_core/migration.sql",
+      "arm-06": "prisma/migrations/20260728164419_domain_core/migration.sql:504; scripts/test-constraints.mts"
+    }
+  },
+  {
+    "id": "R-140",
+    "name": "Ordered migrations + schema-change guard (CI)",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "19 chronologically-ordered migration folders; package.json 'migration:guard' runs `prisma migrate diff --from-migrations ... --to-schema-datamodel ... --exit-code` against a real shadow DB (good drift detection), chained into a 'ci' script. BUT no actual .github/workflows CI file exists anywhere in the tree -- the guard is real but never wired to run automatically."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts/migrations, same gap (no CI workflow file)."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts/migrations, same gap (no CI workflow file)."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts/migrations, same gap (no CI workflow file)."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "The ONLY arm with a real .github/workflows/ci.yml wired to run lint/typecheck/migration:guard/migration:harness/test on push+PR. However its 'migration:guard' script is only `prisma validate` (schema syntax check) -- it does NOT diff schema against applied migrations, so it cannot actually detect drift. Also has two migration folders with the exact same timestamp (20260727234500_p5_checkout and 20260727234500_p8_shipping_labels), an ordering-fragility smell."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "20 ordered migrations; scripts/migration-guard.mjs explicitly (1) validates folder-name regex, (2) verifies on-disk sort order matches lexical order, (3) checks `prisma migrate status` is up to date, and (4) runs `prisma migrate diff` for real drift detection -- the most rigorous guard logic of the six. Still no .github/workflows file wiring it into actual CI."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "package.json scripts.migration:guard; prisma/migrations/ (19 dirs)",
+      "arm-05": ".github/workflows/ci.yml; scripts/migration-guard.ts",
+      "arm-06": "scripts/migration-guard.mjs; prisma/migrations/ (20 dirs)"
+    }
+  },
+  {
+    "id": "R-141",
+    "name": "Disposable migration verification harness",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "scripts/db-start.ts spins an embedded-postgres cluster with a throwaway 'shadow' DB used only by migration:guard's diff check; tests/domain-db.test.ts exercises real DB writes. No single-purpose 'run all migrations against a fresh disposable DB and verify' script beyond the shadow-diff."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical scripts."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Dedicated 'migration:harness' script (scripts/migration-harness.ts) that spins a fresh local embedded-postgres via runWithLocalDatabase, runs `prisma migrate deploy` then `prisma migrate status` against it -- a genuine disposable-DB migration replay, separate in concern from the (weak) guard script."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "scripts/db-start.mjs (embedded postgres) + migration-guard.mjs's migrate-status/diff checks, PLUS scripts/test-constraints.mts is a live-DB regression harness that inserts CHECK-violating rows against a real migrated database and asserts rejection -- the most substantive verification that migrations actually enforce what they claim."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "scripts/db-start.ts",
+      "arm-05": "scripts/migration-harness.ts",
+      "arm-06": "scripts/migration-guard.mjs; scripts/test-constraints.mts"
+    }
+  },
+  {
+    "id": "R-142",
+    "name": "Repeatable baseline seed",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "262-line prisma/seed.ts, fully upsert-based (idempotent), seeds settings/customer/address/sample order via real domain functions (findOrLinkCustomer, finalizeOrder) rather than raw inserts -- exercises the actual code paths."
+      },
+      "arm-02": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical seed.ts."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical seed.ts."
+      },
+      "arm-04": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical seed.ts."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "200-line seed.ts, also fully upsert-based, seeds season/products/options directly via Prisma client. Slightly thinner domain coverage than clone (no full order-through-finalize exercise)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Seed logic factored into lib/testops/baseline-seed.ts (420 lines, 38 create/upsert calls) shared between `npm run seed` and the P12 test console / scale-seed script -- single source of truth for baseline data, best separation of concerns."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/seed.ts:1-262",
+      "arm-05": "prisma/seed.ts:1-200",
+      "arm-06": "prisma/seed.ts; lib/testops/baseline-seed.ts"
+    }
+  },
+  {
+    "id": "R-143",
+    "name": "Auditable staged import pipeline + atomic commits",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "LegacyImportRun -> LegacyImportStage (per-entity-stage, @@unique[runId,stage]) -> AddressReviewItem models. fileHash unique for resume-safety; lib/legacy-import/plan.ts (dry-run) + commit.ts (per-stage transactions) with a real test (legacy-plan.test.ts) exercising dedupe/repair/bucket logic against a messy fixture CSV."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical implementation."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical implementation."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical implementation."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [
+          "THEATER"
+        ],
+        "note": "No dedicated import-run/stage models at all. stageImport()/commitImport() (lib/admin-operations.ts) stash a JSON blob under the generic AppSetting table keyed by a random batchId, and commit is a single flat transaction for exactly one of two kinds (customers OR products) -- no addresses/orders stage, no per-stage completion tracking, no resume-on-crash story. Real transactional atomicity on commit, but 'staged pipeline' is a thin CSV-uploader, not the multi-entity legacy migration this item describes."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Single ImportBatch model spans BOTH ordinary CSV imports and legacy migration kinds (ImportKind: CUSTOMERS/PRODUCTS/LEGACY_CUSTOMERS/LEGACY_PRODUCTS/LEGACY_ORDERS) via one staged-then-atomic engine (lib/imports/engine.ts) with per-kind handlers under lib/imports/legacy/ (customers.ts, products.ts, orders.ts, cleanup.ts, resolve-customer.ts). Explicit dryRun flag that can never commit. Most complete and most auditable of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:1032-1081; lib/legacy-import/plan.ts; lib/legacy-import/commit.ts",
+      "arm-05": "lib/admin-operations.ts:60-127",
+      "arm-06": "prisma/schema.prisma:825-849; lib/imports/engine.ts; lib/imports/legacy/*"
+    }
+  },
+  {
+    "id": "R-144",
+    "name": "Customer records (normalized phone/email + dedupe)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "email unique (lowercased), phoneNormalized unique (digits-only, US leading-1 stripped). lib/customers.ts's findOrLinkCustomer() matches by identity then email; phone deliberately NEVER used for account linking (documented security fix) but is used for staff-side dedupe search."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "emailNormalized + phoneNormalized both unique nullable columns; normalizeEmail/normalizePhone in lib/foundation.ts. Less documented reasoning around phone-based account-takeover risk than clone cluster."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "email unique, normalizedPhone unique; lib/imports/legacy/resolve-customer.ts implements explicit ambiguity law (email+phone pointing at different existing customers -> row invalid, human decision required) -- the most rigorous dedupe policy documentation of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:57-70; lib/customers.ts",
+      "arm-05": "prisma/schema.prisma:350-362; lib/foundation.ts:16-22",
+      "arm-06": "prisma/schema.prisma:167-181; lib/imports/legacy/resolve-customer.ts"
+    }
+  },
+  {
+    "id": "R-145",
+    "name": "Saved addresses with geocoding fields",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "CustomerAddress: latitude/longitude/geocodedAt nullable Floats, filled lazily; @@unique[customerId, normalizedKey] for dedupe; lastGreeting memory field."
+      },
+      "arm-02": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Address: latitude/longitude as Decimal(9,6) (more precise than Float), reviewStatus/reviewReason for a manual cleanup queue baked directly onto the address row."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Address: lat/lng nullable, needsReview + reviewReason flags feeding a documented staff review queue (docs/LEGACY-ENTITY-MAP.md), lastGreeting memory field. Slightly richer review workflow than the other two."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:76-98",
+      "arm-05": "prisma/schema.prisma:364-389",
+      "arm-06": "prisma/schema.prisma:351-380"
+    }
+  },
+  {
+    "id": "R-146",
+    "name": "Season model gating catalog per year",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Season.status (OPEN/CLOSED) gates storefront visibility; opensAt/closesAt optional scheduled auto-flip; orderCounter backs sequential numbers; Product/AddOn/Order/Package/OrderDraft all seasonId-scoped."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Season.year unique + status + opensAt/closesAt + nextOrderNumber; Product is seasonId-scoped. Functionally equivalent, slightly less schema commentary/edge-case documentation."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Season.status + scheduledOpensAt/scheduledClosesAt + lastOrderSeq/lastDraftSeq (separate counters for orders vs drafts, a small improvement); Product/Order/PrintBatch/DeliveryRoute/BulkDeliverySchedule all seasonId-scoped."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:156-181",
+      "arm-05": "prisma/schema.prisma:152-164",
+      "arm-06": "prisma/schema.prisma:243-260"
+    }
+  },
+  {
+    "id": "R-147",
+    "name": "Product catalog schema (dims, inventory flags, kinds)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Product: widthCm/lengthCm/heightCm/weightGrams, trackInventory, isActive, ProductKind (STANDARD/BUILD_YOUR_OWN/GIFT_CARD), replacementId self-relation for repeat-order continuity. AddOn is a fully separate first-class catalog entity."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "Product: lengthInches/widthInches/heightInches/weightOunces as Decimal, isInventoryTracked, ProductKind (PACKAGE/ADD_ON/DONATION) -- add-ons are modeled as Product rows of kind ADD_ON rather than a separate entity, a less clean separation of concerns (a 'god-model' merge of two different catalog concepts) even though ProductAddOn still expresses the restriction relation."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Product: lengthMm/widthMm/heightMm/weightGrams, trackInventory + allowBackorder (extra useful flag), ProductKind (GOOD/BUNDLE/SERVICE), replacedById self-relation. AddOn is a separate first-class entity like clone. Most complete flag coverage."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:189-250",
+      "arm-05": "prisma/schema.prisma:166-207",
+      "arm-06": "prisma/schema.prisma:266-338"
+    }
+  },
+  {
+    "id": "R-148",
+    "name": "Product options with price adjustments",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "ProductOption.priceAdjustmentCents, @@unique[productId,name], isActive flag, linked to OrderLineOption snapshot table."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "ProductOption.priceAdjustmentCents with an explicit name+value pair (@@unique[productId,name,value]) -- slightly more expressive (name='Presentation', value='Classic ribbon') than clone's flat name."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Two-level ProductOption -> ProductOptionValue with priceDeltaCents on the value, @@unique[optionId,label]. Cleaner normalization than a flat name+value pair (an option can have many priced values without denormalizing the option name)."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:225-235",
+      "arm-05": "prisma/schema.prisma:313-324",
+      "arm-06": "prisma/schema.prisma:300-321"
+    }
+  },
+  {
+    "id": "R-149",
+    "name": "Normalized order tree (Order -> OrderLine -> add-ons)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Order -> OrderLine -> {OrderLineOption, OrderLineAddOn} as three distinct, clearly-named join/snapshot tables. Textbook-normalized, easy to reason about."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Order -> OrderLine -> OrderLineAddOn, plus a PackageLine join between OrderLine and Package. Missing a distinct options-join (options travel as a Json optionSnapshot on OrderLine instead of a relational row), a small step down in normalization for options specifically."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "Order -> DraftRecipient -> OrderLine, with add-ons modeled as a SELF-REFERENTIAL OrderLine row (parentLineId) rather than a separate add-on table. Clever (one CHECK enforces exactly one of productId/addOnId + add-on lines must carry parentLineId) but a real design deviation from a textbook tree -- a single table now serves two different row shapes, which is harder to reason about than clone's explicit separate tables."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:350-394",
+      "arm-05": "prisma/schema.prisma:435-466",
+      "arm-06": "prisma/schema.prisma:440-505"
+    }
+  },
+  {
+    "id": "R-150",
+    "name": "Price snapshots on order lines",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "OrderLine.unitPriceCents, OrderLineOption.priceAdjustmentCents, OrderLineAddOn.unitPriceCents all captured at write time; comment explicitly documents 'not FK to live price' intent."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "OrderLine carries unitPriceCents PLUS productNameSnapshot, skuSnapshot, and a full optionSnapshot Json -- the most thorough explicit snapshot naming of the six, guarding against catalog renames as well as repricing."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "OrderLine.unitPriceCents, productName, optionLabel, optionPriceDeltaCents, lineTotalCents all snapshotted; comment explicitly states FKs exist 'to reject fabricated ids, not for live price lookups.'"
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:347-371",
+      "arm-05": "prisma/schema.prisma:435-452",
+      "arm-06": "prisma/schema.prisma:472-505"
+    }
+  },
+  {
+    "id": "R-151",
+    "name": "Sequential order numbers per season",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Season.orderCounter incremented atomically inside the finalize transaction; @@unique[seasonId, orderNumber] guarantees no collision."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Season.nextOrderNumber + @@unique[seasonId, orderNumber]. Same core guarantee, single counter."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Season.lastOrderSeq AND lastDraftSeq -- separate counters for order numbers vs draft reference numbers, avoiding cross-contamination between the two sequences. @@unique[seasonId, orderNumber] present; a dedicated claimOrderNumber() helper referenced from the legacy-import doc for the 'always re-derive, never trust imported numbers' rule (order-number repair)."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:165-181,304-345",
+      "arm-05": "prisma/schema.prisma:152-164,402-433",
+      "arm-06": "prisma/schema.prisma:243-260,387-438"
+    }
+  },
+  {
+    "id": "R-152",
+    "name": "Cached derived payment status on orders",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Order.paymentStatus: dedicated OrderPaymentStatus enum (UNPAID/PARTIAL/PAID/COMPED), distinct from PaymentState (POSTED/VOIDED) used on individual Payment rows -- clean separation between the order-level cache and the payment-record lifecycle."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "Order.paymentStatus and Payment.status BOTH reuse the exact same PaymentStatus enum (PENDING/POSTED/VOIDED/REFUNDED). Reusing one enum for two different concerns (an order-level aggregate cache vs an individual payment record's lifecycle) is a modeling smell -- REFUNDED/PENDING don't cleanly describe an order's aggregate state the way UNPAID/PARTIAL/PAID/COMPED do."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Order.paymentStatus: dedicated PaymentStatus enum (UNPAID/PARTIAL/PAID/OVERPAID) distinct from Payment.status (PaymentRecordStatus: POSTED/VOIDED). OVERPAID is a thoughtful edge case the other arms don't model."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:294-299,304-345",
+      "arm-05": "prisma/schema.prisma:66-71,402-433,623-639",
+      "arm-06": "prisma/schema.prisma:44-49,58-61,387-438"
+    }
+  },
+  {
+    "id": "R-153",
+    "name": "Fulfillment groups (multi-destination) + snapshots",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Package: full address/recipient FIELD snapshot (not FK) -- recipientName/addressLine1/city/state/zip all copied onto the package row, groupingKey merges lines sharing recipient/address/method/greeting. Immune to later address-book edits."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "Package.addressId is an FK (onDelete: SetNull) to Address rather than a full field snapshot; recipientName/recipientPhone are snapshotted but line1/city/state/zip are NOT -- if the address book row is edited or its owning customer's address deleted, a finalized package's street address silently changes or disappears. Real correctness gap vs. the other two arms' snapshot approach."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Package.recipientAddressId FK uses onDelete: Restrict specifically so 'the stored groupingKey ... can never go stale' (explicit comment) -- an alternative to full field-snapshotting that achieves the same immutability guarantee by making the address undeletable once referenced. recipientName is still snapshotted directly."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:404-439",
+      "arm-05": "prisma/schema.prisma:468-501",
+      "arm-06": "prisma/schema.prisma:507-546"
+    }
+  },
+  {
+    "id": "R-154",
+    "name": "Data-driven fulfillment methods",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "FulfillmentMethod: code/name/kind(enum)/isActive/sortOrder rows, referenced by OrderLine and Package -- managers add methods without a code change (per schema comment)."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "FulfillmentMethod: code/name/isActive/sortOrder, referenced by Package. Same pattern, one fewer field (no kind discriminator on the row itself)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "FulfillmentMethod adds a stages Json + terminalStage field -- even the package-stage progression per method is data-driven (e.g. PICKUP: NEW->PACKED->PICKED_UP vs DELIVERY: NEW->PRINTED->PACKED->SENT), a further step beyond the other two arms' method-level-only data-drivenness."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:263-286",
+      "arm-05": "prisma/schema.prisma:391-400",
+      "arm-06": "prisma/schema.prisma:602-616"
+    }
+  },
+  {
+    "id": "R-155",
+    "name": "Shipping quotes with selectable expiring options",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "ShippingQuote (provider/quotedAt/expiresAt) -> ShippingQuoteOption[] (carrier/service/amountCents/estimatedDays) as a real normalized parent/children pair -- each option is a queryable, indexable row; customer selects one option from the set."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "ShippingQuote is itself ONE carrier/service/amountCents row with its own expiresAt -- there's no parent 'quote' grouping multiple carrier options together; 'selectable options' has to be reconstructed by querying several ShippingQuote rows for the same package, which is a weaker structural expression of the requirement."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "ShippingQuote.options is a Json blob (array of options) under one expiresAt -- correctly groups multiple options under one quote/expiry, but the options themselves aren't normalized rows (less queryable/indexable than clone's dedicated child table)."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:570-593",
+      "arm-05": "prisma/schema.prisma:678-690",
+      "arm-06": "prisma/schema.prisma:688-700"
+    }
+  },
+  {
+    "id": "R-156",
+    "name": "Pickup locations",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "PickupLocation model (name/line1/city/state/zip/isActive) exists with full admin CRUD (app/api/admin/pickup-locations), but NO FK from Package to PickupLocation anywhere in the schema -- a pickup package's specific location assignment isn't modeled, only the location catalog is."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PickupLocation model PLUS Package.pickupLocationId (nullable FK, onDelete: SetNull) -- an individual package's pickup location assignment is actually modeled and wired, closing the gap the other five arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PickupLocation model with admin CRUD, same gap as clone cluster: no FK from Package to PickupLocation."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:641-649; app/api/admin/pickup-locations/",
+      "arm-05": "prisma/schema.prisma:468-501,692-704",
+      "arm-06": "prisma/schema.prisma:750-762"
+    }
+  },
+  {
+    "id": "R-157",
+    "name": "Package types + shipment boxes",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "PackageType and ShipmentBox both exist as standalone dimension catalogs (name/widthCm/lengthCm/heightCm/weightGrams), but neither is actually referenced by the Shipment model (which only carries a free-form parcels Json bin-packing snapshot) -- the catalogs are disconnected from real shipment records."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PackageType (dims + maxWeightOunces) <- ShipmentBox.packageTypeId (Restrict) <- ShipmentBox.packageId (SetNull, an assigned box on a specific package) -- an actual wired chain from box-type catalog to a real package's box assignment, closing the gap the other arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PackageType and ShipmentBox both exist as standalone catalogs; Shipment carries only a parcels Json snapshot, same disconnection as clone cluster."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:651-669",
+      "arm-05": "prisma/schema.prisma:706-740",
+      "arm-06": "prisma/schema.prisma:767-792"
+    }
+  },
+  {
+    "id": "R-158",
+    "name": "Unified inventory (products + add-ons, versioned)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "InventoryItem: nullable productId/addOnId (XOR CHECK-enforced), quantityOnHand/reserved, version for optimistic locking. One row-shape serves both catalog kinds."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "InventoryItem: nullable productId/productAddOnId (XOR CHECK), quantityOnHand/quantityReserved, version, plus a separate InventoryReservation child table recording individual reservations per order line -- slightly more auditable than a bare counter."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "InventoryItem: nullable productId/addOnId (XOR CHECK), onHand/reserved, version. Functionally equivalent to clone cluster."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:675-684",
+      "arm-05": "prisma/schema.prisma:742-772",
+      "arm-06": "prisma/schema.prisma:794-810"
+    }
+  },
+  {
+    "id": "R-159",
+    "name": "Stripe PaymentIntent modeling",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "StripePaymentIntent (stripeIntentId unique, status, amountCents) AND a separate StripeCheckoutSession (stripeSessionId unique, status, amountCents, paymentIntentId) -- models both the hosted-checkout session and the underlying intent as distinct, auditable rows."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "StripePaymentIntent (1:1 optional link to Payment via paymentId) plus a separate CheckoutSession model (providerSessionId/providerIntentId/status/amountCents). Comparable coverage to clone cluster, provider-agnostic naming."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "StripePaymentIntent exists (intentId unique, raw Json webhook payload with an explicit PII-redaction comment) but there is NO separate checkout-session model -- Order.stripeSessionId is just a plain unique string field, less normalized/auditable than the other two arms' dedicated session tables."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:532-555",
+      "arm-05": "prisma/schema.prisma:641-666",
+      "arm-06": "prisma/schema.prisma:387-438,660-673"
+    }
+  },
+  {
+    "id": "R-160",
+    "name": "Payments (stripe/cash/check/comp) with posted/voided states",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "PaymentMethod (STRIPE/CASH/CHECK/COMP) x PaymentState (POSTED/VOIDED); refunds modeled as negative-amount POSTED rows keyed by unique stripeRefundId, explicitly documented so recalculation needs no special-casing and the refund webhook is idempotent."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "PaymentMethod same 4 values, but status reuses the order-level PaymentStatus enum (PENDING/POSTED/VOIDED/REFUNDED) noted as a smell in R-152 -- REFUNDED as a distinct payment status rather than clone's negative-amount-row convention is a workable alternative but is less internally consistent with how the rest of the schema recomputes aggregates."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "PaymentMethod (STRIPE/CASH/CHECK/COMP) x PaymentRecordStatus (POSTED/VOIDED), refundRef field for the Stripe refund id, explicit comment on the 'keyless seam' (no live Stripe keys on this host) fallback behavior."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:500-530",
+      "arm-05": "prisma/schema.prisma:59-71,623-639",
+      "arm-06": "prisma/schema.prisma:51-61,635-655"
+    }
+  },
+  {
+    "id": "R-161",
+    "name": "Key-value settings store with typed registry",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Setting{key,value:Json} table PLUS lib/settings.ts: a real Zod-schema-per-key registry (SETTING_SCHEMAS) with defaults and typed getters -- reads always validate, writes can't store a malformed value. Genuinely typed, not just a KV table."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "lib/settings.ts is an in-memory plain object (SettingMap) with get/setSetting functions that never touch the database at all -- values reset on every process restart and are completely disconnected from the real AppSetting DB table. The actual settings persistence (app/api/admin/settings/route.ts) bypasses this file entirely and does ad-hoc per-route Zod validation directly against prisma.appSetting with no shared typed registry. Two parallel, inconsistent settings systems; the 'typed registry' deliverable is dead code."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "Setting{key,value:Json} table PLUS lib/settings.ts: a Zod-schema-per-key registry (settingSchemas) covering brand/shipping/delivery/pickup/payments keys with rich inline documentation of each key's real-world purpose. Equal quality to the clone cluster's registry."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:137-142; lib/settings.ts:1-60",
+      "arm-05": "prisma/schema.prisma:146-150; lib/settings.ts:1-18; app/api/admin/settings/route.ts",
+      "arm-06": "prisma/schema.prisma:228-234; lib/settings.ts:1-40"
+    }
+  },
+  {
+    "id": "R-162",
+    "name": "Geocode cache with success/failure TTLs",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "GeocodeCache{addressHash unique, latitude, longitude, provider, fetchedAt, expiresAt}. lib/addresses/geocode.ts implements a real 30-day success cache with a live Mapbox provider + deterministic local fallback, but a FAILED lookup (coordinates null) is simply returned uncached -- there is no negative/failure-specific TTL, and the schema itself has no way to represent a cached failure (lat/lng are non-nullable). 'Success/failure TTLs' as stated is only half-built."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "GeocodeCache{normalizedAddress unique, latitude/longitude Decimal, provider, expiresAt}. lib/delivery.ts has the same shape: real Mapbox call + fixture fallback, 30-day success TTL, no distinct failure-TTL representation."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "GeocodeCache{addressKey unique, lat/lng, provider, fetchedAt, expiresAt}, 30-day TTL. lib/customers/geocode.ts's deriveGeoPoint is a pure hash-based deterministic function with NO live external geocoding API integration at all (explicitly documented as 'no live geocoding API is reachable from this host') -- it can never actually fail, so the failure-TTL half of this requirement is not just unimplemented but structurally moot; also the least realistic of the three geocoders."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:687-695; lib/addresses/geocode.ts",
+      "arm-05": "prisma/schema.prisma:774-785; lib/delivery.ts:79-104",
+      "arm-06": "prisma/schema.prisma:813-823; lib/customers/geocode.ts"
+    }
+  },
+  {
+    "id": "R-163",
+    "name": "Cron/job run log",
+    "scores": {
+      "arm-01": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "CronRunLog{jobName, startedAt, finishedAt, status, detail:Json}, indexed [jobName,startedAt]. lib/cron.ts wires it in."
+      },
+      "arm-02": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 7,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "CronRunLog{jobName, startedAt, completedAt, outcome, details:Json}, indexed [jobName,startedAt]. Equivalent shape, lib/cron-auth.ts wires it."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "CronRun{name, status(enum RUNNING/OK/FAILED), startedAt, finishedAt, message}, indexed [name,startedAt]. Uses a real enum for status (small edge over the free-text status field in the other two arms) and is exercised across the broadest set of P9-P12 cron scripts of the six."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:697-707",
+      "arm-05": "prisma/schema.prisma:787-796",
+      "arm-06": "prisma/schema.prisma:851-862"
+    }
+  },
+  {
+    "id": "R-164",
+    "name": "Data-layer helper libraries (money/normalize/phone/ids/season/dates/result)",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Concepts exist but scattered, not consolidated: normalizePhone lives inside lib/customers.ts, normalizedAddressKey inside lib/addresses/normalize.ts, formatCents inside lib/catalog.ts, season helpers in lib/season.ts, a domain-specific id generator in lib/domain/draft-reference.ts. No dedicated money.ts/dates.ts, and no Result<T,E> pattern anywhere (errors are thrown, not returned) -- functional coverage is fine but the 'one file per concern' cleanliness this item implies isn't there."
+      },
+      "arm-02": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Verified via `diff -rq lib/` against arm-01: fully identical lib/ tree (arm-02 has zero differing files at all)."
+      },
+      "arm-03": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Verified via `diff -rq lib/` against arm-01: the only differing files (checkout/fees.ts, public-guard.ts, routes/driver-access.ts, shipping/margin.ts) are unrelated to R-164's named helper concerns -- all money/normalize/phone/season files are byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Verified via `diff -rq lib/` against arm-01: same 4 unrelated differing files as arm-03; all R-164-relevant helper files identical."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "lib/foundation.ts consolidates formatMoney/centsToDollars, normalizeEmail/normalizePhone/normalizeAddress, and createPublicId into ONE file -- a 'god-util' module that covers most named concerns but with no separation by concern, no dedicated season.ts/dates.ts, and no Result type (maskError() is a thin error-message helper, not a Result pattern)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Genuinely separated dedicated files: lib/money.ts, lib/phone.ts, lib/dates.ts, lib/seasons/, lib/imports/legacy/normalize.ts. lib/errors.ts defines typed NotFoundError/DomainRuleError classes as the project's one error-handling convention (a reasonable substitute for a formal Result<T,E> type, explicitly documented as 'one error-handling approach per project'). Clearly the cleanest and most consolidated of the six, though it stops short of a literal Result<T,E> generic type."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/customers.ts; lib/addresses/normalize.ts; lib/catalog.ts:52; lib/season.ts; lib/domain/draft-reference.ts",
+      "arm-05": "lib/foundation.ts:1-45",
+      "arm-06": "lib/money.ts; lib/phone.ts; lib/dates.ts; lib/errors.ts; lib/seasons/"
+    }
+  },
+  {
+    "id": "R-165",
+    "name": "Legacy\u2192new data migration plan (documented entity map)",
+    "scores": {
+      "arm-01": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "A working, tested legacy-import engine exists (lib/legacy-import/plan.ts + commit.ts, exercised against a messy fixture CSV in tests/legacy-plan.test.ts covering dedupe/merge/repair/bucket logic), and inline comments describe the mapping rationale at each model/field -- but there is NO standalone documented entity-map artifact (no docs/ file mapping legacy columns to new fields end-to-end). The mapping knowledge lives only in code comments and test assertions, not as a reviewable document."
+      },
+      "arm-02": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 5,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No legacy-system migration concept at all beyond a generic 'upload a customers or products CSV' staged importer (see R-143). There is no entity map, documented or otherwise, from an old ordering system's schema to this one -- searched the full tree (grep -in \"legacy\") and found nothing beyond a decision-log line about the 'imports.manage' permission name."
+      },
+      "arm-06": {
+        "score": 9,
+        "flags": [],
+        "note": "docs/LEGACY-ENTITY-MAP.md: a genuine standalone document with field-by-field mapping tables for Seasons, Customers (incl. merge/ambiguity rules), Products (incl. slug-dedupe policy), and Orders (incl. order-number repair, refunded-order net-zero handling, and unknown-product stub-and-review flow), cross-referenced to the actual code (lib/imports/legacy/*). This is the only arm that treats 'documented entity map' as a literal deliverable rather than implicit in code comments."
+      }
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "lib/legacy-import/plan.ts; tests/legacy-plan.test.ts",
+      "arm-05": "DECISION-LOG.md:3-5 (only reference found)",
+      "arm-06": "docs/LEGACY-ENTITY-MAP.md:1-85"
+    }
+  }
+]

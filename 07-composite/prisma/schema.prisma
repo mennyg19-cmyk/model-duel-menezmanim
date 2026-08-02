@@ -1,0 +1,1320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  MANAGER
+  STAFF
+  DRIVER
+}
+
+enum StaffStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum OverrideEffect {
+  GRANT
+  DENY
+}
+
+enum SeasonStatus {
+  OPEN
+  CLOSED
+}
+
+enum ProductKind {
+  GOOD
+  BUNDLE
+  SERVICE
+}
+
+enum OrderStatus {
+  DRAFT
+  FINALIZED
+  DISCARDED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERPAID
+}
+
+enum PaymentMethod {
+  STRIPE
+  CASH
+  CHECK
+  COMP
+}
+
+enum PaymentRecordStatus {
+  POSTED
+  VOIDED
+}
+
+enum FulfillmentChoice {
+  PICKUP
+  BULK_DELIVERY
+  PER_PACKAGE_DELIVERY
+  // P8: carrier shipping via Shippo (UR-003) — the out-of-area path.
+  SHIPPED
+}
+
+enum PackageStage {
+  NEW
+  PRINTED
+  PACKED
+  SENT
+  PICKED_UP
+}
+
+enum AssemblyBatchStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum CronRunStatus {
+  RUNNING
+  OK
+  FAILED
+}
+
+enum ImportKind {
+  CUSTOMERS
+  PRODUCTS
+  // P12 (R-186/G-029): messy legacy export kinds. The staged-atomic engine is
+  // shared; per-kind handlers own normalization, dedupe keys, and commit law.
+  LEGACY_CUSTOMERS
+  LEGACY_PRODUCTS
+  LEGACY_ORDERS
+}
+
+enum ImportStatus {
+  STAGED
+  COMMITTED
+  DISCARDED
+}
+
+enum PrintBatchTrigger {
+  NIGHTLY
+  REPRINT_GROUP
+  REPRINT_ORDER
+}
+
+enum ShipmentStatus {
+  PURCHASING
+  PURCHASED
+  VOIDED
+  FAILED
+}
+
+// P9: a delivery route runs PLANNED (stops editable, link creatable) ->
+// STARTED (driver tapped start, day-of notifications sent) -> COMPLETED
+// (every stop delivered; the magic link dies).
+enum DeliveryRouteStatus {
+  PLANNED
+  STARTED
+  COMPLETED
+}
+
+model StaffUser {
+  id            String               @id @default(cuid())
+  email         String               @unique
+  name          String
+  role          StaffRole            @default(STAFF)
+  status        StaffStatus          @default(PENDING)
+  inviteToken   String?              @unique
+  invitedAt     DateTime?
+  confirmedAt   DateTime?
+  // Set once, at invite confirmation (lib/passwords.ts, PBKDF2). This is the
+  // only repeatable production sign-in path staff have — without it, a
+  // session expiry after the one-time invite link is a permanent lockout.
+  passwordHash  String?
+  version       Int                  @default(1)
+  overrides     PermissionOverride[]
+  sessions      AuthSession[]
+  uploadedMedia MediaAsset[]
+  createdCampaigns EmailCampaign[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@map("staff_users")
+}
+
+model PermissionOverride {
+  id          String         @id @default(cuid())
+  staffUser   StaffUser      @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  staffUserId String
+  permission  String
+  effect      OverrideEffect
+  createdAt   DateTime       @default(now())
+
+  @@unique([staffUserId, permission])
+  @@map("permission_overrides")
+}
+
+// Customers are accounts, never staff rows (UR-012, resolution 8a).
+// clerkUserId links the app customer to the external identity provider subject.
+// Dedupe (R-144): engine matches on email (normalized at write) or normalizedPhone;
+// both arms are backed by unique indexes, so concurrent signups collapse onto
+// one row instead of silently duplicating.
+model Customer {
+  id              String            @id @default(cuid())
+  email           String            @unique
+  name            String
+  phone           String?
+  normalizedPhone String?           @unique
+  clerkUserId     String?           @unique
+  // Set at self-service registration (lib/passwords.ts, PBKDF2). Null for
+  // customers who only ever checked out as a guest (R-023) and never
+  // registered — a guest order never creates a login-capable account.
+  passwordHash    String?
+  addresses       Address[]
+  orders          Order[]
+  sessions        CustomerSession[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("customers")
+}
+
+// P4: server-side customer sessions — same discipline as AuthSession for
+// staff. The HMAC cookie identifies the session row; expiry/revocation are
+// checked against this table on every customer-gated request.
+model CustomerSession {
+  id         String    @id @default(cuid())
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String
+  ip         String?
+  userAgent  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("customer_sessions")
+}
+
+model AuthSession {
+  id         String    @id @default(cuid())
+  staffUser  StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  staffUserId String
+  ip         String?
+  userAgent  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("auth_sessions")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String?
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([action, createdAt])
+  // P6: the order-detail audit trail looks rows up by target.
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ---------------------------------------------------------------------------
+// P2 — domain core
+// ---------------------------------------------------------------------------
+
+// UR-008: open/closed gate; scheduledOpensAt/ClosesAt are the optional
+// auto-flip schedule (the flip job runs in a later phase; cron run log below).
+// Counters drive per-season sequential order numbers (R-151) and draft refs (R-047).
+model Season {
+  id                 String       @id @default(cuid())
+  name               String       @unique
+  status             SeasonStatus @default(OPEN)
+  scheduledOpensAt   DateTime?
+  scheduledClosesAt  DateTime?
+  lastOrderSeq       Int          @default(0)
+  lastDraftSeq       Int          @default(0)
+  orders             Order[]
+  products           Product[]
+  printBatches       PrintBatch[]
+  deliveryRoutes     DeliveryRoute[]
+  bulkSchedules      BulkDeliverySchedule[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@map("seasons")
+}
+
+// R-146..R-148: dims/kinds/inventory flags; options carry price adjustments;
+// replacedById is the replacement link used by repeat orders (P10).
+// P3: every product belongs to exactly one season (UR-008 per-year catalog);
+// category drives storefront filters (R-015).
+model Product {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  name            String
+  description     String?
+  kind            ProductKind     @default(GOOD)
+  basePriceCents  Int
+  category        String?
+  season          Season          @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  seasonId        String
+  lengthMm        Int?
+  widthMm         Int?
+  heightMm        Int?
+  weightGrams     Int?
+  trackInventory  Boolean         @default(false)
+  allowBackorder  Boolean         @default(false)
+  active          Boolean         @default(true)
+  replacedBy      Product?        @relation("ReplacementLinks", fields: [replacedById], references: [id])
+  replacedById    String?
+  replaces        Product[]       @relation("ReplacementLinks")
+  options         ProductOption[]
+  allowedAddOns   ProductAddOn[]
+  inventoryItem   InventoryItem?
+  orderLines      OrderLine[]
+  bomLines        BomLine[]
+  assemblyBatches AssemblyBatch[]
+  media           MediaAsset[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([seasonId, active])
+  @@map("products")
+}
+
+model ProductOption {
+  id        String               @id @default(cuid())
+  product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  name      String
+  values    ProductOptionValue[]
+
+  @@unique([productId, name])
+  @@map("product_options")
+}
+
+model ProductOptionValue {
+  id              String        @id @default(cuid())
+  option          ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  optionId        String
+  label           String
+  priceDeltaCents Int           @default(0)
+  orderLines      OrderLine[]
+
+  @@unique([optionId, label])
+  @@map("product_option_values")
+}
+
+// Add-ons are their own catalog entity; ProductAddOn restricts which products
+// an add-on may attach to (R-148).
+model AddOn {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  name          String
+  priceCents    Int
+  active        Boolean        @default(true)
+  products      ProductAddOn[]
+  inventoryItem InventoryItem?
+  orderLines    OrderLine[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("add_ons")
+}
+
+model ProductAddOn {
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  addOn     AddOn   @relation(fields: [addOnId], references: [id], onDelete: Cascade)
+  addOnId   String
+
+  @@id([productId, addOnId])
+  @@map("product_add_ons")
+}
+
+// R-145: saved addresses carry geocode fields; geocode cache below owns TTLs.
+model Address {
+  id            String         @id @default(cuid())
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId    String
+  label         String?
+  line1         String
+  line2         String?
+  city          String
+  region        String
+  postalCode    String
+  country       String         @default("US")
+  lat           Float?
+  lng           Float?
+  geocodedAt    DateTime?
+  // G-020: the greeting this recipient got last time; written at order
+  // finalize and prefilled on the next checkout.
+  lastGreeting  String?
+  // P12 (UR-014): address-book cleanup + legacy import flag rows a human
+  // must decide on (ambiguous duplicate group, unfixable field shape).
+  needsReview   Boolean       @default(false)
+  reviewReason  String?
+  packages      Package[]
+  recipients    DraftRecipient[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([customerId, label])
+  @@index([customerId, needsReview])
+  @@map("addresses")
+}
+
+// R-044..R-047, R-149..R-152. orderNumber is claimed atomically on finalize;
+// draftRef/wireFormat carry the draft reference + wire format.
+// P4: guestTokenHash is the HMAC of the one-time guest access token (R-023) —
+// the raw token is never stored, and draft lookups without it return 404 so
+// draft refs cannot be enumerated.
+model Order {
+  id             String                @id @default(cuid())
+  season         Season                @relation(fields: [seasonId], references: [id])
+  seasonId       String
+  customer       Customer              @relation(fields: [customerId], references: [id])
+  customerId     String
+  status         OrderStatus           @default(DRAFT)
+  orderNumber    Int?
+  draftRef       String?               @unique
+  wireFormat     String?
+  guestTokenHash String?               @unique
+  paymentStatus  PaymentStatus         @default(UNPAID)
+  totalCents     Int                   @default(0)
+  // P5 checkout: fee/greeting/session snapshots. totalCents = lines +
+  // deliveryFeesCents, frozen at submit so a paid order can never be
+  // repriced by a later staff method change. stockReserved marks that
+  // inventory rows were reserved at submit and must be committed on
+  // finalize or released on discard/expiry.
+  deliveryFeesCents Int                @default(0)
+  greetingDefault  String?
+  stripeSessionId  String?             @unique
+  stockReserved    Boolean             @default(false)
+  version        Int                   @default(1)
+  // P9 (R-080): last payment-reminder send; the cron re-reminds on the
+  // configured interval instead of spamming every run.
+  lastPaymentReminderAt DateTime?
+  // P10 (R-041/R-057/R-058): which order this draft repeats (null on fresh
+  // carts). Bulk-history reruns skip orders that already have a
+  // non-discarded repeat draft in the open season; SetNull keeps the draft
+  // when the source order is purged.
+  repeatedFrom       Order?  @relation("RepeatLineage", fields: [repeatedFromOrderId], references: [id])
+  repeatedFromOrderId String?
+  repeats            Order[] @relation("RepeatLineage")
+  // P12 (R-186): the legacy system's order number, kept verbatim for audit
+  // when order-number repair assigns a clean per-season sequence at import.
+  legacyRef      String?
+  lines          OrderLine[]
+  recipients     DraftRecipient[]
+  payments       Payment[]
+  stripeIntents  StripePaymentIntent[]
+  webhookEvents  StripeWebhookEvent[]
+  shippingQuotes ShippingQuote[]
+  packages       Package[]
+  outboxMessages OutboxMessage[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([seasonId, orderNumber])
+  // P6 (G-024): the admin order list filters + sorts on exactly these columns.
+  @@index([seasonId, status, paymentStatus, createdAt])
+  @@map("orders")
+}
+
+// P4 (UR-006/G-018): a recipient on a draft order. Address fields are a
+// snapshot so the draft survives address-book edits/deletes; addressId links
+// back to the book row the recipient came from (SetNull on book delete).
+// Packages materialize from these rows at finalize (P5/P7).
+model DraftRecipient {
+  id          String      @id @default(cuid())
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+  name        String
+  line1       String
+  line2       String?
+  city        String
+  region      String
+  postalCode  String
+  country     String      @default("US")
+  address     Address?    @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  addressId   String?
+  // Per-recipient fulfillment (UR-009) + greeting override (UR-013).
+  // deliveryFeeCents is the paid snapshot (bulk = per destination,
+  // per-package = per recipient); deliveryDay is the manager-set
+  // Purim-week day choice required for per-package delivery.
+  fulfillmentChoice FulfillmentChoice?
+  deliveryDay       String?
+  deliveryFeeCents  Int         @default(0)
+  greeting          String?
+  lines       OrderLine[]
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId])
+  @@map("draft_recipients")
+}
+
+// OrderLine tree (R-150): add-on lines hang off their parent product line via
+// parentLineId (CASCADE: deleting a parent line removes its add-on lines with
+// it). All names/prices are snapshots taken at write; the FK references exist
+// to reject fabricated catalog ids, not for live price lookups. Line-kind
+// integrity (exactly one of productId/addOnId; add-on lines must carry a
+// parentLineId; product lines must not) is CHECK-enforced in the migration.
+model OrderLine {
+  id                   String              @id @default(cuid())
+  order                Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId              String
+  parentLine           OrderLine?          @relation("LineAddOns", fields: [parentLineId], references: [id], onDelete: Cascade)
+  parentLineId         String?
+  addOnLines           OrderLine[]         @relation("LineAddOns")
+  // P4: recipient assignment (UR-006). SetNull — removing a draft recipient
+  // unassigns its lines instead of deleting them.
+  recipient            DraftRecipient?     @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  recipientId          String?
+  product              Product?            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId            String?
+  productName          String
+  qty                  Int                 @default(1)
+  unitPriceCents       Int
+  optionValue          ProductOptionValue? @relation(fields: [optionValueId], references: [id], onDelete: Restrict)
+  optionValueId        String?
+  optionLabel          String?
+  optionPriceDeltaCents Int                @default(0)
+  addOn                AddOn?              @relation(fields: [addOnId], references: [id], onDelete: Restrict)
+  addOnId              String?
+  lineTotalCents       Int
+  packageLines         PackageLine[]
+  createdAt            DateTime            @default(now())
+
+  @@map("order_lines")
+}
+
+// UR-001: recipient/address/method/greeting grouping key; stages optional and
+// data-driven via FulfillmentMethod.stages; PackageEvent is package-level audit.
+// P7: channel/deliveryDay are fulfillment snapshots taken at materialization —
+// the channel dashboard and nightly filing groups read them without re-deriving
+// checkout choices.
+model Package {
+  id                   String            @id @default(cuid())
+  order                Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId              String
+  recipientName        String
+  // RESTRICT: an address referenced by packages cannot be deleted, so the
+  // stored groupingKey (which embeds the address id) can never go stale.
+  recipientAddress     Address?          @relation(fields: [recipientAddressId], references: [id], onDelete: Restrict)
+  recipientAddressId   String?
+  fulfillmentMethod    FulfillmentMethod @relation(fields: [fulfillmentMethodId], references: [id])
+  fulfillmentMethodId  String
+  greeting             String?
+  groupingKey          String
+  stage                PackageStage      @default(NEW)
+  channel              FulfillmentChoice @default(PICKUP)
+  deliveryDay          String?
+  version              Int               @default(1)
+  // P9 pickup lifecycle (UR-010): ready when inventory is available, ready
+  // notification sent once, expiry notification sent once (G-017/G-026).
+  pickupReadyAt           DateTime?
+  pickupReadyNotifiedAt   DateTime?
+  pickupExpiredNotifiedAt DateTime?
+  lines                PackageLine[]
+  events               PackageEvent[]
+  batchItems           PrintBatchItem[]
+  shippingQuotes       ShippingQuote[]
+  shipments            Shipment[]
+  routeStops           RouteStop[]
+  bulkScheduleItems    BulkDeliveryScheduleItem[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([orderId, groupingKey])
+  @@map("packages")
+}
+
+// P7: package contents. qty follows the order line at materialization and
+// moves between packages on split/regroup; orderLine RESTRICT keeps a printed
+// slip honest — a line referenced by a package cannot vanish under it.
+model PackageLine {
+  id          String    @id @default(cuid())
+  package     Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId   String
+  orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  orderLineId String
+  qty         Int
+
+  @@unique([packageId, orderLineId])
+  @@map("package_lines")
+}
+
+// UR-005: nightly print batches. One batch row per filing group per run;
+// membership is persisted (PrintBatchItem) so PDFs render on demand and a
+// rerun never re-files a package. Reprints create a new batch that supersedes
+// the predecessor instead of mutating it.
+model PrintBatch {
+  id           String            @id @default(cuid())
+  season       Season            @relation(fields: [seasonId], references: [id])
+  seasonId     String
+  filingGroup  String
+  trigger      PrintBatchTrigger
+  supersedes   PrintBatch?       @relation("BatchSupersession", fields: [supersedesId], references: [id])
+  supersedesId String?
+  supersededBy PrintBatch[]      @relation("BatchSupersession")
+  packageCount Int               @default(0)
+  // Loose staff-id snapshot by design (no relation): batch history must
+  // survive staff-user deletion; enforceable attribution lives in AuditLog.
+  createdById  String?
+  items        PrintBatchItem[]
+  createdAt    DateTime          @default(now())
+
+  @@index([seasonId, filingGroup, createdAt])
+  @@map("print_batches")
+}
+
+model PrintBatchItem {
+  id        String     @id @default(cuid())
+  batch     PrintBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchId   String
+  package   Package    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId String
+  // Denormalized so the per-order slips page and order reprints never join
+  // through Package.
+  orderId   String
+
+  @@unique([batchId, packageId])
+  @@index([packageId])
+  @@map("print_batch_items")
+}
+
+// R-153/R-154: data-driven fulfillment methods own their stage lists, e.g.
+// DELIVERY: NEW→PRINTED→PACKED→SENT; PICKUP: NEW→PACKED→PICKED_UP.
+model FulfillmentMethod {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  label           String
+  stages          Json
+  terminalStage   PackageStage
+  active          Boolean   @default(true)
+  packages        Package[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("fulfillment_methods")
+}
+
+model PackageEvent {
+  id         String       @id @default(cuid())
+  package    Package      @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId  String
+  action     String
+  fromStage  PackageStage?
+  toStage    PackageStage?
+  actorId    String?
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+
+  @@index([packageId, createdAt])
+  @@map("package_events")
+}
+
+// R-160: posted/voided payments; voided rows are excluded from the cached
+// payment status recomputation.
+model Payment {
+  id           String              @id @default(cuid())
+  order        Order               @relation(fields: [orderId], references: [id])
+  orderId      String
+  method       PaymentMethod
+  status       PaymentRecordStatus @default(POSTED)
+  amountCents  Int
+  postedById   String?
+  // P5: Stripe payment-intent id on web payments (refund sync R-168 finds
+  // the row to void from a charge.refunded event); null on POS payments.
+  externalRef  String?
+  // P6 (R-054): Stripe refund id on refunded card payments; null on the
+  // keyless seam (no live keys on this host) and on offline refunds.
+  refundRef    String?
+  voidedAt     DateTime?
+  voidReason   String?
+  createdAt    DateTime            @default(now())
+
+  @@index([orderId, status])
+  @@map("payments")
+}
+
+// R-159: Stripe PaymentIntent mirror; raw holds the last webhook payload
+// (writers must redact PII/card fields before persisting). The intent
+// clientSecret is a payment credential and is deliberately NOT stored.
+model StripePaymentIntent {
+  id          String   @id @default(cuid())
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderId     String
+  intentId    String   @unique
+  amountCents Int
+  currency    String   @default("usd")
+  status      String
+  raw         Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("stripe_payment_intents")
+}
+
+// R-125 idempotency: one row per processed webhook event; the unique eventId
+// makes a replay a no-op row-count instead of a second finalize/payment.
+model StripeWebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  type        String
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId     String?
+  processedAt DateTime @default(now())
+
+  @@map("stripe_webhook_events")
+}
+
+// R-155: quote options expire — checkout must re-quote after expiresAt.
+model ShippingQuote {
+  id         String   @id @default(cuid())
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String?
+  package    Package? @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId  String?
+  options    Json
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@map("shipping_quotes")
+}
+
+// P8 (R-055, UR-003): one label purchase attempt per row. The money triple
+// charged/cost/margin is the reconciliation ledger (P12 reports on it):
+// charged = the shipping fee the customer paid (frozen at checkout), cost =
+// what the carrier label actually cost, margin = the spread the org keeps.
+// A partial unique index (migration SQL) guarantees one active
+// (PURCHASING|PURCHASED) shipment per package.
+model Shipment {
+  id                  String         @id @default(cuid())
+  package             Package        @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId           String
+  status              ShipmentStatus @default(PURCHASING)
+  shippoShipmentId    String?
+  shippoTransactionId String?
+  rateId              String?
+  carrier             String?
+  serviceLevel        String?
+  trackingNumber      String?
+  trackingStatus      String?
+  trackingStatusAt    DateTime?
+  labelUrl            String?
+  chargedCents        Int
+  costCents           Int?
+  marginCents         Int?
+  // Per-recipient charge split when a merged SHIPPED package carries several
+  // frozen fees: [{ recipientId, chargedCents }]. The P12 reconciliation reads
+  // this to separate the honest per-recipient spread from the combined-parcel
+  // packing artifact (charged sums per-recipient quotes, cost prices the
+  // merged shipment).
+  chargeBreakdown     Json?
+  // Shippo's async void refund: the refund object id + its last known status
+  // (QUEUED/PENDING settle carrier-side later; the shipping sweep re-checks
+  // them and reverts the row to PURCHASED on a carrier decline).
+  shippoRefundId      String?
+  refundStatus        String?
+  // The parcels the label was bought for (bin-packing snapshot, R-081).
+  parcels             Json?
+  // R-175: Shippo's failure reason lives here; the order's paid total is
+  // never mutated by a label failure (documented compensation rule).
+  error               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  voidedAt            DateTime?
+
+  @@index([packageId, status])
+  @@map("shipments")
+}
+
+// R-156
+model PickupLocation {
+  id         String   @id @default(cuid())
+  name       String
+  line1      String
+  city       String
+  region     String
+  postalCode String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("pickup_locations")
+}
+
+// R-157: package types and the boxes shipments go out in. weightGrams (P8) is
+// the typical packed weight — the bin-packing fallback for products without
+// their own dims/weight never under-declares a parcel.
+model PackageType {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  lengthMm        Int
+  widthMm         Int
+  heightMm        Int
+  weightGrams     Int      @default(0)
+  maxWeightGrams  Int?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@map("package_types")
+}
+
+model ShipmentBox {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  lengthMm        Int
+  widthMm         Int
+  heightMm        Int
+  tareWeightGrams Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@map("shipment_boxes")
+}
+
+// R-158/R-139: one inventory row per unit of stock, targeting exactly one of
+// product | addOn (XOR enforced by CHECK in the migration); version drives
+// optimistic concurrency on mutations.
+model InventoryItem {
+  id        String   @id @default(cuid())
+  product   Product? @relation(fields: [productId], references: [id])
+  productId String?  @unique
+  addOn     AddOn?   @relation(fields: [addOnId], references: [id])
+  addOnId   String?  @unique
+  onHand    Int      @default(0)
+  reserved  Int      @default(0)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("inventory_items")
+}
+
+// R-162: geocode results cached per normalized address with a TTL.
+model GeocodeCache {
+  id         String   @id @default(cuid())
+  addressKey String   @unique
+  lat        Float
+  lng        Float
+  provider   String
+  fetchedAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@map("geocode_cache")
+}
+
+// R-063/R-143: staged CSV imports. payload holds the parsed rows with their
+// staged verdicts; the commit re-validates against the live database inside
+// one transaction, so a half-applied import can never exist.
+model ImportBatch {
+  id            String       @id @default(cuid())
+  kind          ImportKind
+  status        ImportStatus @default(STAGED)
+  filename      String
+  payload       Json
+  totalRows     Int          @default(0)
+  validRows     Int          @default(0)
+  duplicateRows Int          @default(0)
+  invalidRows   Int          @default(0)
+  committedRows Int          @default(0)
+  actorId       String?
+  actorEmail    String?
+  committedAt   DateTime?
+  // P12 (R-186): a dry-run batch is the full validation report with zero
+  // domain writes — commit is refused; the batch row itself is the evidence.
+  dryRun        Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+
+  @@index([kind, createdAt])
+  @@map("import_batches")
+}
+
+// R-163: every cron execution leaves a row.
+model CronRun {
+  id         String        @id @default(cuid())
+  name       String
+  status     CronRunStatus @default(RUNNING)
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  message    String?
+
+  @@index([name, startedAt])
+  @@map("cron_runs")
+}
+
+// ---------------------------------------------------------------------------
+// P3 — storefront, newsletter, media
+// ---------------------------------------------------------------------------
+
+// R-009/R-018: newsletter subscribers with three independent preference
+// flags; unsubscribedAt is the global opt-out. Manage/unsubscribe links are
+// HMAC-signed tokens (lib/newsletter/tokens.ts), never bare ids.
+model NewsletterSubscriber {
+  id                 String                  @id @default(cuid())
+  email              String                  @unique
+  name               String?
+  prefNewProducts    Boolean                 @default(true)
+  prefReminders      Boolean                 @default(true)
+  prefCommunity      Boolean                 @default(true)
+  unsubscribedAt     DateTime?
+  listMemberships    EmailListMembership[]
+  campaignRecipients EmailCampaignRecipient[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@map("newsletter_subscribers")
+}
+
+// R-067/R-128/R-180: one row per uploaded asset. driver records where the
+// bytes live ("vercel-blob" when BLOB_READ_WRITE_TOKEN is set, else the local
+// .uploads seam); url is the public read path (/uploads/<storedName> locally).
+// productId is the photo assignment (SetNull so deleting a product never
+// destroys the library row).
+model MediaAsset {
+  id           String     @id @default(cuid())
+  url          String
+  storedName   String     @unique
+  filename     String
+  contentType  String
+  sizeBytes    Int
+  driver       String
+  product      Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId    String?
+  uploadedBy   StaffUser? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+  createdAt    DateTime   @default(now())
+
+  @@index([productId])
+  @@map("media_assets")
+}
+
+// UR-016/G-009: BOM + assembly batches are schema-only this phase (no UI;
+// managers enable the feature later).
+model Ingredient {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  unit        String
+  onHand      Decimal   @default(0) @db.Decimal(12, 3)
+  bomLines    BomLine[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("ingredients")
+}
+
+model BomLine {
+  id           String     @id @default(cuid())
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId    String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  ingredientId String
+  qty          Decimal    @db.Decimal(12, 3)
+
+  @@unique([productId, ingredientId])
+  @@map("bom_lines")
+}
+
+model AssemblyBatch {
+  id          String              @id @default(cuid())
+  product     Product             @relation(fields: [productId], references: [id])
+  productId   String
+  qtyPlanned  Int
+  status      AssemblyBatchStatus @default(PLANNED)
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("assembly_batches")
+}
+
+// ---------------------------------------------------------------------------
+// P9 — delivery routes, driver magic links, pickup, notifications
+// ---------------------------------------------------------------------------
+
+// R-075/R-076: one route per delivery run. createdById is a loose staff-id
+// snapshot by design (same discipline as PrintBatch): route history must
+// survive staff-user deletion; enforceable attribution lives in AuditLog.
+model DeliveryRoute {
+  id          String              @id @default(cuid())
+  season      Season              @relation(fields: [seasonId], references: [id])
+  seasonId    String
+  name        String
+  deliveryDay String?
+  status      DeliveryRouteStatus @default(PLANNED)
+  stops       RouteStop[]
+  link        DriverRouteLink?
+  events      RouteEvent[]
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdById String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([seasonId, status, createdAt])
+  @@map("delivery_routes")
+}
+
+// R-074: seq-ordered stops with the address + geocode snapshot taken at
+// assignment — the printed sheet and the driver link stay honest even when
+// the address book row is edited afterward. recipientName is a snapshot for
+// the same reason (and keeps customer PII off the driver payload).
+model RouteStop {
+  id              String        @id @default(cuid())
+  route           DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId         String
+  seq             Int
+  // CASCADE: deleting a package (regroup absorb, season cleanup) removes its
+  // stops — a RESTRICT here made any ever-routed package undeletable with no
+  // staff recovery. Route events keep the stop id as plain text history.
+  package         Package       @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId       String
+  recipientName   String
+  addressLine1    String
+  addressLine2    String?
+  city            String
+  region          String
+  postalCode      String
+  lat             Float?
+  lng             Float?
+  deliveredAt     DateTime?
+  // Idempotent day-of notification (route start): set when this stop's
+  // customer was notified, so a re-start never double-sends.
+  dayOfNotifiedAt DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@unique([routeId, packageId])
+  @@index([packageId])
+  @@map("route_stops")
+}
+
+// UR-004/UR-015/G-025: one magic link per route. The raw token (32 crypto
+// bytes) is shown once at creation and NEVER stored — tokenHash is SHA-256.
+// pinHash is SHA-256 of the manager-texted 4-digit PIN; failures throttle
+// DB-side (5 misses -> 10-minute lock). The link is dead once the route
+// completes or expiresAt passes.
+model DriverRouteLink {
+  id             String        @id @default(cuid())
+  route          DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId        String        @unique
+  tokenHash      String        @unique
+  pinHash        String?
+  pinFailures    Int           @default(0)
+  // Lifetime lock count — never resets on a correct PIN, so a brute-force
+  // cadence escalates (10m, 20m, 40m, … capped) and dies after PIN_MAX_LOCKS.
+  pinLockCount   Int           @default(0)
+  pinLockedUntil DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime      @default(now())
+
+  @@map("driver_route_links")
+}
+
+// G-025: route-level audit — every Delivered tap (timestamp + link id), route
+// lifecycle, reassigns and reroute stop adds. action vocabulary lives in
+// lib/routes/events.ts (one typing discipline per concern, like PackageEvent).
+model RouteEvent {
+  id        String        @id @default(cuid())
+  route     DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  routeId   String
+  action    String
+  stopId    String?
+  linkId    String?
+  actorId   String?
+  metadata  Json?
+  createdAt DateTime      @default(now())
+
+  @@index([routeId, createdAt])
+  @@map("route_events")
+}
+
+// P11 (R-088/R-181): lifecycle of one outbox row. PENDING awaits the sweep;
+// SENDING is an in-flight claim (crash → next sweep re-claims it by age);
+// SENT is terminal-success; FAILED keeps the auditable failure trail
+// (attempts + lastError) until maxAttempts makes it permanent.
+enum OutboxStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+// P9 notification seam (G-021) grown into the P11 transactional outbox: every
+// email/SMS the system sends is a row here first (R-088). kind and channel
+// vocabularies live in lib/notify/outbox.ts; the sweeper (lib/email/
+// outbox-sweep.ts) drains PENDING rows through the Resend/Twilio drivers (or
+// the capture double when no keys exist) exactly once per row.
+model OutboxMessage {
+  id            String       @id @default(cuid())
+  kind          String
+  channel       String
+  toAddress     String
+  subject       String?
+  body          String
+  order         Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId       String?
+  metadata      Json?
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  lastAttemptAt DateTime?
+  providerId    String?
+  lastError     String?
+  sentAt        DateTime?
+  // Campaign deliveries land in this log too (R-083): one row per campaign
+  // recipient, claimed and drained by the same law as every other send.
+  campaignRecipient   EmailCampaignRecipient? @relation(fields: [campaignRecipientId], references: [id], onDelete: SetNull)
+  campaignRecipientId String?                 @unique
+  createdAt     DateTime     @default(now())
+
+  @@index([kind, channel, createdAt])
+  @@index([status, createdAt])
+  @@index([status, lastAttemptAt])
+  @@map("outbox_messages")
+}
+
+// ---------------------------------------------------------------------------
+// P11 — email platform (R-082..R-090, R-163, R-171, R-172, R-178, R-181)
+// ---------------------------------------------------------------------------
+
+// R-084: staff-managed mailing lists over newsletter subscribers. Campaigns
+// target one list; membership is an explicit join row.
+model EmailList {
+  id          String               @id @default(cuid())
+  name        String               @unique
+  description String?
+  members     EmailListMembership[]
+  campaigns   EmailCampaign[]
+  createdAt   DateTime             @default(now())
+
+  @@map("email_lists")
+}
+
+model EmailListMembership {
+  id           String               @id @default(cuid())
+  list         EmailList            @relation(fields: [listId], references: [id], onDelete: Cascade)
+  listId       String
+  subscriber   NewsletterSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  subscriberId String
+  createdAt    DateTime             @default(now())
+
+  @@unique([listId, subscriberId])
+  @@map("email_list_memberships")
+}
+
+// R-085: reusable text templates with branding tokens ({{brand}},
+// {{customerName}}, {{orderRef}}, {{footer}} — renderer in lib/email/render.ts).
+// Campaigns start from one; triggered overrides may point at one.
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  subject   String
+  bodyText  String
+  overrides EmailTriggeredOverride[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+// R-086/R-178: per-key control over triggered/transactional email. enabled=false
+// suppresses the send entirely; subject/body overrides replace the coded
+// defaults at enqueue time so the outbox row is the exact final text.
+model EmailTriggeredOverride {
+  key                  String         @id
+  enabled              Boolean        @default(true)
+  subjectOverride      String?
+  bodyTemplateOverride String?
+  template             EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId           String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@map("email_triggered_overrides")
+}
+
+enum EmailCampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
+}
+
+// R-083/R-089: one campaign = one subject/body to one list. Sends snapshot the
+// membership into recipient rows, so reruns are idempotent by construction
+// (the unique [campaignId, subscriberId] key can never double-deliver).
+model EmailCampaign {
+  id          String              @id @default(cuid())
+  name        String
+  subject     String
+  bodyText    String
+  list        EmailList           @relation(fields: [listId], references: [id])
+  listId      String
+  status      EmailCampaignStatus @default(DRAFT)
+  recipients  EmailCampaignRecipient[]
+  createdBy   StaffUser?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  sentAt      DateTime?
+  lastError   String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@map("email_campaigns")
+}
+
+enum EmailRecipientStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// R-083/R-178: one row per (campaign, subscriber) — the delivery unit. The
+// unique pair is the no-duplicates law; per-row claim (PENDING/FAILED →
+// SENDING) makes overlapping send passes safe.
+model EmailCampaignRecipient {
+  id           String               @id @default(cuid())
+  campaign     EmailCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId   String
+  subscriber   NewsletterSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  subscriberId String
+  email        String
+  status       EmailRecipientStatus @default(PENDING)
+  attempts     Int                  @default(0)
+  // Claim clock mirroring the delivery outbox row: a SENDING recipient whose
+  // clock went stale (crashed send pass) is reclaimable on the next rerun.
+  lastAttemptAt DateTime?
+  lastError    String?
+  providerId   String?
+  sentAt       DateTime?
+  outboxMessage OutboxMessage?
+  createdAt    DateTime             @default(now())
+
+  @@unique([campaignId, subscriberId])
+  @@index([campaignId, status])
+  @@map("email_campaign_recipients")
+}
+
+// G-021/R-079: staff-scheduled bulk delivery run. Membership is a persisted
+// snapshot (like PrintBatchItem) so the notification set is provable: exactly
+// one email + one SMS per distinct customer, sent at schedule time.
+model BulkDeliverySchedule {
+  id            String                     @id @default(cuid())
+  season        Season                     @relation(fields: [seasonId], references: [id])
+  seasonId      String
+  deliveryDay   String
+  window        String?
+  packageCount  Int                        @default(0)
+  customerCount Int                        @default(0)
+  notifiedAt    DateTime?
+  items         BulkDeliveryScheduleItem[]
+  createdById   String?
+  createdAt     DateTime                   @default(now())
+
+  @@index([seasonId, createdAt])
+  @@map("bulk_delivery_schedules")
+}
+
+model BulkDeliveryScheduleItem {
+  id         String              @id @default(cuid())
+  schedule   BulkDeliverySchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduleId String
+  package    Package             @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId  String
+  orderId    String
+  customerId String
+
+  @@unique([scheduleId, packageId])
+  @@map("bulk_delivery_schedule_items")
+}
+
+// ---------------------------------------------------------------------------
+// P12 — Stripe reconciliation (R-093)
+// ---------------------------------------------------------------------------
+
+enum ReconciliationRunStatus {
+  RUNNING
+  OK
+  FAILED
+}
+
+// One matcher pass over the Stripe-side intent list vs local mirrors +
+// posted payments. The matcher never mutates payments — findings are the
+// whole output, so a rerun over unchanged data cannot duplicate an
+// adjustment. actorId/Email are null on the cron path.
+model ReconciliationRun {
+  id            String                  @id @default(cuid())
+  status        ReconciliationRunStatus @default(RUNNING)
+  // Driver mode snapshot: "live" (real Stripe), "fixture" (dev double), or
+  // "capture" (keyless — local mirrors only, nothing Stripe-side to check).
+  mode          String
+  checkedCount  Int                     @default(0)
+  matchedCount  Int                     @default(0)
+  flaggedCount  Int                     @default(0)
+  findings      ReconciliationFinding[]
+  actorId       String?
+  actorEmail    String?
+  startedAt     DateTime                @default(now())
+  finishedAt    DateTime?
+  message       String?
+
+  @@index([startedAt])
+  @@map("reconciliation_runs")
+}
+
+enum ReconciliationFindingKind {
+  // Stripe-side intent carrying metadata.orderId that never reached us
+  // (no mirror row) — e.g. a checkout completed while webhooks were down.
+  ORPHANED_INTENT
+  // Intent succeeded Stripe-side but no posted Payment references it.
+  MISSING_PAYMENT
+  // Posted payment amount disagrees with the Stripe-side amount.
+  AMOUNT_MISMATCH
+  // Local mirror row for an intent Stripe no longer returns.
+  STALE_MIRROR
+  // Mirror status disagrees with the Stripe-side status.
+  STATUS_DRIFT
+}
+
+model ReconciliationFinding {
+  id        String                    @id @default(cuid())
+  run       ReconciliationRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId     String
+  kind      ReconciliationFindingKind
+  intentId  String?
+  orderId   String?
+  detail    String
+  createdAt DateTime                  @default(now())
+
+  @@index([runId])
+  @@index([intentId])
+  @@map("reconciliation_findings")
+}
