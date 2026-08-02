@@ -273,3 +273,21 @@ Each numbered folder has its own short `README.md`.
 - Product under test: MenEZmanim  
 
 License for this documentation and artifact pack: MIT (see [`LICENSE`](LICENSE)). MenEZmanim application code remains under its own license and is not redistributed here.
+
+---
+
+## Best-of-six composite (2026-08-02)
+
+After the six-arm Tomchei duel, a brutal per-item inventory grade picked
+**arm-06 (`kimi-k3-max`)** as the feature base, then hardened residual majors.
+
+- App + docs: [`07-composite/`](07-composite/)
+- Decisions: [`07-composite/docs/COMPOSITE-DECISIONS.md`](07-composite/docs/COMPOSITE-DECISIONS.md)
+- Full scorecard: [`07-composite/docs/COMPOSITE-GRADING.md`](07-composite/docs/COMPOSITE-GRADING.md)
+
+Intended permanent home: branch on
+[`Tomchei-Shabbos-Website`](https://github.com/mennyg19-cmyk/Tomchei-Shabbos-Website)
+(`cursor/best-of-six-composite-e5a5`). This cloud agent’s token could not push
+there (403); the composite lives here until that write access is granted or
+the tree is copied over manually.
+

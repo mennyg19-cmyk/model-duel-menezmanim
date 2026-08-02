@@ -1,0 +1,171 @@
+# Tomchei Shabbos — Mishloach Manos platform
+
+Best-of-six composite rebuilt from the multi-model duel
+(`2026-07-20-1748-tomchei-shabbos-website-model_duel`).
+
+**Base:** arm-06 (`kimi-k3-max`) — feature-completeness winner across the
+reconciled inventory + grill resolutions. Hardened with residual fixes and
+selected arm-04 lessons (CSV formula neutralization, security bar).
+
+See [`docs/COMPOSITE-DECISIONS.md`](docs/COMPOSITE-DECISIONS.md) and
+[`docs/COMPOSITE-GRADING.md`](docs/COMPOSITE-GRADING.md) for the brutal
+per-item scorecard.
+
+Stack: Next.js (App Router, RSC) + Prisma + Postgres.
+
+## Ports
+
+- Web: **3000** (`npm run dev` / `npm start`)
+- DB: embedded Postgres via `npm run db:start` (default port from `.env` / duel arm used **4106**)
+
+## Run it
+
+```bash
+npm install
+npm run db:start          # leave running; embedded Postgres
+npx prisma migrate dev    # apply migrations
+npm run seed              # baseline seed (settings, seasons, products, add-ons, demo customer)
+npm run gen:env-example   # regenerate .env.example from lib/env-spec.ts
+npm run build
+npm start                 # serves on 3000
+```
+
+Copy `.env.example` to `.env` and fill values. A missing/invalid variable fails startup with a clear message (validated in `lib/env.ts` at boot).
+
+## What P3 ships
+
+- **Storefront shell** — sticky header (desktop links + hamburger sheet + user menu placeholder), closed-season banner, footer with mission/contact/hours links and the newsletter signup.
+- **Homepage** — mission hero, live impact bar (cumulative counts from the DB: packages packed, orders fulfilled, families reached), how-it-works, testimonials, store-open-aware CTAs ("Order" only when a season is OPEN).
+- **Catalog** — `/packages` current-season grid with category filters, price sort, sold-out badges (reserve-aware stock math), quick-view dialog; `/packages/[slug]` detail with option pricing that updates the displayed total live.
+- **Archive** — `/past-collections` browses CLOSED seasons' catalogs (read-only, no buy buttons).
+- **Gate stubs** — `/order`, `/checkout`, `/account` enforce season closure; `/checkout` includes the live delivery-ZIP checker (`/api/delivery-check` reads the settings allowlist per request).
+- **Newsletter** — `POST /api/subscribe` (upsert), token-verified `/unsubscribe` page (three independent preference states + unsubscribe-all), HMAC-signed 30-day links (`lib/newsletter/tokens.ts`).
+- **Admin catalog** — `/admin/products` (season select, create/edit, options upsert editor, replacement-link editor, per-product add-on restrictions), `/admin/addons`, `/admin/media` (upload, assign, delete).
+- **Settings hub** — `/admin/settings` with Orders (package types + pickup locations), Shipping (delivery-ZIP allowlist, fees, rules), Email (P11 placeholder), Developer (storage driver, API-keys placeholder) tabs.
+
+## What P4 ships
+
+- **Cart-first order builder** (`/order`) — add items first, assign recipients per line afterward (UR-006). Desktop = catalog + sticky cart sidebar; mobile = catalog + floating cart button opening a bottom sheet. Quick-view dialog selects options, restricted add-ons, and quantity with live unit pricing.
+- **Three-way recipient assignment** — each line assigns to a recipient already on this order, a saved address-book entry, or a brand-new recipient (auto-saves to the book by default, G-019). Duplicate recipient detection merges matching entries.
+- **Address book** — normalized + validated writes, dedupe on a normalized content key (same address never saved twice), deterministic geocode seam with DB cache (`lib/customers/geocode.ts` — swap point for a live provider), autocomplete in the recipient form, full CRUD under `/account/addresses`. Staff address edits (`/admin/customers` → addresses) ride the same lib and write an audit row per change (G-019).
+- **Live stock** — grid and quick-view show reserve-aware availability; adding beyond available stock is blocked client-side, and the server re-validates on save/checkout.
+- **Autosave drafts** — signed-in customers: debounced server save (`POST /api/drafts`, ownership by session). Guests: local-storage draft that becomes a server draft with a one-time guest access token at checkout (R-023). Draft URLs without a valid owner session/token return 404 (anti-enumeration).
+- **Account area** — `/account` dashboard (drafts + recent orders + address count), `/account/orders` history, `/account/orders/[id]` detail with per-recipient line grouping, continue/pay/cancel actions for drafts, `/account/profile` (name/email/phone), `/account/addresses`.
+- **Checkout draft view** — `/checkout?ref=…(&token=…)` renders the draft summary (lines by recipient, totals) ahead of P5 payment; FINALIZED orders show confirmation, DISCARDED 404s.
+
+## What P5 ships
+
+- **Per-recipient fulfillment at checkout** — each recipient picks pickup (free), bulk delivery (one fee per destination address — two recipients on the same normalized address share it), or per-package delivery (fee per recipient, hard ZIP-allowlist block with no override, manager-set Purim-week day). Fees come from typed settings (`delivery.fees`, `delivery.days`) — the placeholder rate-resolution seam live Shippo rates occupy in P8.
+- **Checkout submit/pay engine** (`lib/checkout/`) — server re-prices every line and re-checks stock at submit; any drift or a tampered `expectedTotalCents` is a 409 conflict with fresh totals, never a stale charge. Submit freezes fee/greeting snapshots and reserves stock; finalize (Stripe webhook or POS) commits it; discard/draft-edit/session-expiry releases it.
+- **Greetings** — order-level default + per-recipient override; the effective greeting is remembered on the recipient's address-book row (`Address.lastGreeting`) and prefilled next season (G-020).
+- **Hosted Stripe Checkout** — hand-rolled on native `fetch` + `node:crypto` (no stripe dependency, ponytail ladder): `mode=payment` immediate capture against the frozen server total, HMAC-verified webhook (`/api/webhooks/stripe`), idempotency via one `StripeWebhookEvent` row per event id, charged-amount safety check with auto-refund + audit on any mismatch, and `charge.refunded` sync that voids the posted payment. No live keys on this host: `/api/checkout/pay` answers an explicit 503 and the smoke drives the webhook with fixtures signed exactly the Stripe way.
+- **POS payments** — staff-only cash/check/comp posting + voiding (`payments.manage`) with `payment_post`/`payment_void`/`order_finalize` audit rows; cached `paymentStatus` recomputes on every write. Offline methods are schema-refused on POS and 403-refused publicly.
+- **Public guards** — same-origin check, 20/min IP rate limit, and zod on both checkout endpoints; guest draft ownership still 404-on-miss (R-121/R-122).
+
+## What P6 ships
+
+- **Admin order ops** — `/admin/orders` list (status/season/search filters, pagination) and `/admin/orders/[orderId]` detail with money panel (post cash/check/comp, void, Stripe refund) and repeat/discard actions.
+- **Bulk repeat/discard** (`lib/orders/bulk.ts`) — bounded runner (≤50 ids) scoped to the open season, deterministic per-row report (duplicates and out-of-season ids are named skips), per-discard transactional audit rows plus one `bulk_action` summary carrying the full outcome list.
+- **Refunds** — `lib/payments/refund.ts` voids the posted payment and reopens outstanding balance only after the Stripe refund succeeds; on a keyless host the refund is refused up front (refund in the Stripe dashboard; the local row voids itself when the refund webhook lands) instead of faking a local void.
+- **POS counter flow** — `/admin/pos` customer lookup → shared order builder → POS checkout; amount may not exceed the order total, and unknown methods refuse loudly.
+- **CSV imports** (`lib/imports/`) — staged-atomic engine: stage → preview (valid/duplicate/invalid with reasons) → commit in one transaction. Customers dedupe on email **and** normalized phone, both in-file and against the DB; products dedupe on slug. Permission-scoped batch lists (`customers.manage` vs `catalog.manage`).
+- **Admin dashboard & directory** — `/admin` counts + open-season money, `/admin/customers` searchable directory, `/admin/audit` log (PII metadata redacted unless the viewer holds `customers.manage`).
+
+## What P7 ships
+
+- **Package engine** (`lib/packages/`) — finalized orders materialize into Package rows grouped by recipient + fulfillment channel; data-driven stage lists per fulfillment method (DELIVERY runs NEW→PRINTED→PACKED→SENT, PICKUP skips printing), forward-only transitions, optimistic `version` on stage advance.
+- **Print pipeline** — greeting-card + manifest PDFs (`lib/print/pdf.ts`, pdf-lib), batched through the nightly-print cron.
+
+## What P8 ships
+
+- **Shippo shipping** (`lib/shipping/`) — native-fetch wrapper (no SDK), rate quotes and label purchase against the frozen destination snapshot; dev double + `SHIPPO_BASE_URL` seam when no live account exists.
+- **Margin law** (`lib/shipping/margin.ts`) — charge the customer the HIGHEST eligible ground-comparable quote, buy on the CHEAPEST eligible carrier, book the spread per shipment (charged/cost/margin cents on every label).
+- **Shipping maintenance cron** — hourly sweep for label/tracking upkeep.
+
+## What P9 ships
+
+- **Delivery routes** (`lib/routes/builder.ts`) — a delivery day's eligible packages become a seq-ordered geocoded manifest; eligibility is exact (open season, per-package delivery, non-terminal, not already on an active route), G-023 radius law enforced.
+- **Driver flow** — signed driver access links, route events (`writeRouteEvent`), start/advance/complete with terminal-stage sync back to packages.
+- **Pickup** — pickup locations from settings, ready/picked-up stages, pickup-expiry cron for stale ready packages.
+
+## What P10 ships
+
+- **Season wizard** (`lib/seasons/manage.ts`) — create next year's season with optional full catalog copy (products, options, add-on restrictions, and media — each copied MediaAsset owns its own bytes); scheduled open/close datetimes drive the season-flip cron.
+- **Repeat ordering** (`lib/repeat/`) — repeat last year's order into a new draft (`repeatedFromOrderId`), repeat chains, bulk repeat history, and the legacy-import hook that links old-system orders into chains.
+
+## What P11 ships
+
+- **Email platform** (`lib/email/`, `lib/notify/outbox.ts`) — Resend sender isolated in one module (native fetch, no SDK), durable outbox with claim-and-deliver, triggered templates (order confirmation, payment reminders, driver links), per-message audit log, and the email-log-purge cron. Dev double via `RESEND_BASE_URL` when no key exists.
+
+## What P12 ships
+
+- **Reports & exports** — `/admin/reports` rollups and the streamed CSV export center (`lib/exports/datasets.ts`: deliveries, year-end, year-metrics, item-sales, lapsed-customers; formula-injection-safe cells).
+- **Legacy imports** (`lib/imports/legacy/`) — old-system customers/orders import riding the staged-atomic engine, linking repeated orders into repeat chains.
+- **Stripe reconciliation** — `/api/cron/reconcile-stripe` matcher audits posted payments against PaymentIntents (live API, fixture double, or capture-only mode), with per-run driver-mode snapshots.
+- **Test-mode banner & test ops** — explicit `APP_ENV=test` gates the destructive `/api/admin/test-ops/*` routes and shows the test banner; fail-closed default is production.
+
+## Cron schedules (vercel.json)
+
+| Path | Schedule | Job |
+|---|---|---|
+| `/api/cron/nightly-print` | `0 6 * * *` | Batch greeting-card/manifest PDFs |
+| `/api/cron/outbox-sweep` | `*/10 * * * *` | Drain the email outbox |
+| `/api/cron/payment-reminders` | `0 * * * *` | Balance-due reminder emails |
+| `/api/cron/pickup-expiry` | `0 * * * *` | Expire stale ready-for-pickup packages |
+| `/api/cron/season-flip` | `*/15 * * * *` | Open/close seasons at their scheduled datetimes |
+| `/api/cron/shipping-maintenance` | `17 * * * *` | Label/tracking upkeep |
+| `/api/cron/email-log-purge` | `30 3 * * *` | Purge old email log rows |
+| `/api/cron/reconcile-stripe` | `0 5 * * *` | Reconcile posted payments against Stripe |
+
+## Customer auth (dev-auth seam, same shape as staff)
+
+Customer sessions mirror the staff mechanism: HMAC-signed cookie naming a server-side `CustomerSession` row (12h, revocable). `/dev-login` now has a customer section when `DEV_AUTH_BYPASS=true`; `POST/DELETE /api/dev-auth-customer` issues/revokes. Every ownership check runs against the real `Customer` row — there is no client-trusted identity.
+
+## Auth: dev-auth bypass (documented test seam)
+
+**Clerk is NOT installed** — no `@clerk/*` packages, no Clerk middleware. Live Clerk keys were unobtainable on this host, so P1 ships a dev-auth provider behind the seam Clerk will occupy. This is a documented deviation from the P1 plan, not a silent stand-in.
+
+- Session = HMAC-signed cookie (`lib/session-codec.ts`, Web Crypto — the Clerk swap point) with a **server-side `AuthSession` row** (12h `expiresAt`, `revokedAt`). A cookie alone is never enough: `getAuthContext` validates the session row on every request; logout and staff-revoke revoke rows server-side.
+- Constant-time signature compare; `AUTH_SECRET` requires 32+ chars.
+- `DEV_AUTH_BYPASS=true` enables `/dev-login` (pick any active staff account) and `/api/dev-auth`. With the flag off, both 404 and `requireStaff` redirects to `/`.
+- Every role/permission check still runs against the real `StaffUser` row + overrides.
+- Clerk integration point: replace the codec + `/dev-login` with Clerk middleware and map Clerk session claims onto the `AuthContext` shape; `lib/auth.ts` callers stay unchanged.
+
+## Media storage seam (R-180)
+
+Uploads validate type/size/extension in `lib/media/validation.ts`, then store through `lib/media/storage.ts`:
+
+- `BLOB_READ_WRITE_TOKEN` set → Vercel Blob (lazy-loaded, like the Stripe seam).
+- Not set → local driver writes `.uploads/` and serves bytes via `app/uploads/[name]/route.ts` (strict UUID-name pattern — originals and season-wizard copies share that one name shape — immutable caching).
+
+The active driver is shown on `/admin/media` and the Developer settings tab.
+
+## Patterns (one per concern — clean-code rule)
+
+| Concern | Choice |
+|---|---|
+| Mutations | API routes under `/api/**` + `apiFetch` (`lib/api-fetch.ts`) from client components |
+| Auth gates | `requireStaff` / `requirePermission` (pages) and `requireApiPermission` (routes) |
+| Permissions | `lib/permissions.ts` — deny override > grant override > role default |
+| API errors | inline `NextResponse.json({ error }, { status })`; client errors POST to `/api/client-error` |
+| Body parsing | `parseBody(request, schema, message)` (`lib/parse-body.ts`) → 400 on bad JSON/schema |
+| Sessions | `issueSessionResponse` / `clearSessionResponse` / `createLoginSession` (`lib/auth.ts`) |
+| HMAC | `lib/hmac.ts` — session codec and newsletter tokens share sign/verify + base64url |
+| Money | integer cents everywhere; `lib/money.ts` is the only dollar↔cent conversion point |
+| Styling | Tailwind v4 tokens in `app/globals.css` `@theme`; minimal kit in `components/ui/` |
+| Settings | typed key-value store (`lib/settings.ts`) — each key has its own zod schema |
+| Catalog queries | `catalogProductInclude` (`lib/storefront/catalog.ts`) shared by grid/quick-view/detail |
+| Concurrency | optimistic `version` column on `StaffUser` and `InventoryItem`; drafts are single-editor last-write-wins (see `saveDraft`) |
+| CSV imports | staged-atomic engine (`lib/imports/engine.ts`) — stage rows, preview verdicts, commit in one tx; per-kind handlers own schema + dedupe keys |
+| Bulk order actions | bounded runner (`lib/orders/bulk.ts`) — open-season scoped, deterministic per-row report, transactional per-discard audit + one summary row |
+| Admin list controls | `lib/admin/order-list.ts` param parsing + `buildListHref`; `components/admin/pagination-nav.tsx` owns pagination chrome |
+| Dashboard queries | `lib/admin/dashboard.ts` — one query module per dashboard card, no inline Prisma in the page |
+
+## Navigation exceptions
+
+`app/not-found.tsx` and `app/forbidden.tsx` link to `/` ("Back to home") as an explicit exception: these screens have no meaningful "where you came from" target.
+
+## CI
+
+`npm run ci` = lint + typecheck + migration-guard + unit tests (`scripts/test-*.mts`: permissions, grouping, state machine, P3 helpers, P4 helpers — session codec, guest tokens, address dedupe/geocode, cart reducer, rate limiters — P5 helpers: webhook signatures, fulfillment choices, fee math, greetings, same-origin guard) + DB-integration tests (order numbers, inventory race, payments, package stages, constraints, checkout engine — needs the embedded DB running).
+`npm run concurrency-smoke` (app running): 10 concurrent versioned updates → 1 win, 9 conflicts.

@@ -1,0 +1,45 @@
+{
+  "name": "tomchei-shabbos-website",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "migration-guard": "node scripts/migration-guard.mjs",
+    "test:unit": "node --import tsx --test scripts/test-permissions.mts scripts/test-grouping.mts scripts/test-state-machine.mts scripts/test-p3.mts scripts/test-p4.mts scripts/test-p5.mts scripts/test-p6.mts scripts/test-p7.mts scripts/test-p8.mts scripts/test-p9.mts scripts/test-p10.mts scripts/test-p11.mts scripts/test-p12.mts",
+    "test:domain": "tsx scripts/test-order-numbers.mts && tsx scripts/test-inventory-race.mts && tsx scripts/test-payments.mts && tsx scripts/test-package-stages.mts && tsx scripts/test-constraints.mts && tsx scripts/test-checkout.mts && tsx scripts/test-p6-domain.mts && tsx scripts/test-p7-domain.mts && tsx scripts/test-p8-domain.mts && tsx scripts/test-p9-domain.mts && tsx scripts/test-p10-domain.mts && tsx scripts/test-p11-domain.mts && tsx scripts/test-p12-domain.mts",
+    "seed": "tsx prisma/seed.ts",
+    "seed:scale": "tsx scripts/seed-scale.mts",
+    "concurrency-smoke": "node scripts/concurrency-smoke.mjs",
+    "db:start": "node scripts/db-start.mjs",
+    "gen:env-example": "tsx scripts/gen-env-example.mts",
+    "ci": "npm run lint && npm run typecheck && npm run migration-guard && npm run test:unit && npm run test:domain"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "@vercel/blob": "2.6.1",
+    "clsx": "2.1.1",
+    "embedded-postgres": "18.4.0-beta.17",
+    "next": "15.5.22",
+    "pdf-lib": "1.17.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.6.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "8.57.1",
+    "eslint-config-next": "15.5.22",
+    "prisma": "6.19.3",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.1",
+    "typescript": "6.0.3"
+  }
+}
