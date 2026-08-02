@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth";
 import { listRoutes, loadRouteDetail } from "@/lib/routes/builder";
 import { oneLineAddress } from "@/lib/routes/geo";
+import { buildRouteStaticMapUrl } from "@/lib/routes/static-map";
 import { formatBatchTimestamp } from "@/lib/packages/fulfillment";
 import { NotFoundError } from "@/lib/errors";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,9 @@ export default async function AdminRouteDetailPage({ params }: { params: Promise
   });
   const siblingRoutes = (await listRoutes(route.seasonId)).filter(
     (candidate) => candidate.id !== route.id && candidate.status === "PLANNED",
+  );
+  const mapUrl = buildRouteStaticMapUrl(
+    route.stops.map((stop) => ({ lat: stop.lat, lng: stop.lng, delivered: stop.deliveredAt !== null })),
   );
 
   return (
@@ -54,6 +58,16 @@ export default async function AdminRouteDetailPage({ params }: { params: Promise
         stops={route.stops.map((stop) => ({ id: stop.id, seq: stop.seq, recipientName: stop.recipientName }))}
         reassignTargets={siblingRoutes.map((candidate) => ({ id: candidate.id, name: candidate.name }))}
       />
+
+      {mapUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- Mapbox Static Images: a fresh, uniquely-parameterized URL per route, not worth next/image's optimization pipeline
+        <img
+          src={mapUrl}
+          alt={`Map of ${route.stops.length} stop(s) on ${route.name}; blue pins are pending, green are delivered`}
+          className="mt-6 w-full max-w-2xl rounded-lg border border-stone-200"
+          data-route-map
+        />
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card className="p-5">
