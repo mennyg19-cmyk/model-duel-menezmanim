@@ -1,6 +1,11 @@
-// Product photo or fallback glyph — the one place the upload <img> lives.
-// Uploads come from the local driver or Vercel Blob, both outside next/image's
-// configured domains in dev, so the plain <img> is intentional.
+import Image from "next/image";
+
+import { cn } from "@/lib/cn";
+
+// Product photo or fallback glyph. Local-driver uploads (/uploads/<name>) are
+// same-origin; Vercel Blob URLs match the remotePattern in next.config.mjs —
+// both are optimizable, so this renders through next/image with `fill` inside
+// a wrapper that keeps the caller's original sizing classes.
 export function ProductImage({
   src,
   alt,
@@ -14,8 +19,9 @@ export function ProductImage({
 }) {
   if (!src) return <PackageGlyph size={glyphSize} />;
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- uploads come from the local driver or Blob, both outside next/image's configured domains in dev
-    <img src={src} alt={alt} className={className} />
+    <span className={cn("relative block overflow-hidden", className)}>
+      <Image src={src} alt={alt} fill sizes="(max-width: 768px) 50vw, 300px" className="object-cover" />
+    </span>
   );
 }
 

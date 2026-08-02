@@ -3,6 +3,13 @@ const nextConfig = {
   serverExternalPackages: ["@prisma/client"],
   // forbidden()/unauthorized() + forbidden.tsx 403 boundary (Next 15.x flag).
   experimental: { authInterrupts: true },
+  // Vercel Blob is the production media driver (lib/media/storage.ts,
+  // R-180); this lets next/image optimize uploaded photos instead of
+  // serving them unresized. Local dev/smoke images (/uploads/<name>) are
+  // same-origin and need no entry here.
+  images: {
+    remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }],
+  },
   // Baseline security headers on every response: no framing (clickjacking),
   // no MIME sniffing, no full-URL referrers cross-origin.
   async headers() {
