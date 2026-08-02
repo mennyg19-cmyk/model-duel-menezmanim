@@ -9,7 +9,6 @@ import { env } from "@/lib/env";
 // normalized address key (same address always geocodes the same) inside the
 // Lakewood NJ service area, so route ordering and reroute rules behave like
 // real coordinates in dev/test regardless of which path answered.
-const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function deriveGeoPoint(addressKey: string): { lat: number; lng: number } {
   const hash = createHash("sha256").update(addressKey).digest();
@@ -28,21 +27,29 @@ function addressKeyToQuery(addressKey: string): string {
   return [line1, line2, city, region, postalCode, country].filter(Boolean).join(", ");
 }
 
-async function mapboxCoordinates(addressKey: string): Promise<{ lat: number; lng: number } | null> {
-  if (!env.MAPBOX_ACCESS_TOKEN) return null;
+// R-162: a real Mapbox miss (bad/incomplete address) is worth re-trying soon —
+// the customer may fix a typo, or Mapbox's index may simply catch up. An API
+// error/timeout is even more transient. A genuine hit is stable; keep it long.
+const HIT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MISS_TTL_MS = 60 * 60 * 1000;
+
+async function mapboxCoordinates(
+  addressKey: string,
+): Promise<{ point: { lat: number; lng: number } | null; failed: boolean }> {
+  if (!env.MAPBOX_ACCESS_TOKEN) return { point: null, failed: false };
   const query = encodeURIComponent(addressKeyToQuery(addressKey));
   try {
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?limit=1&access_token=${env.MAPBOX_ACCESS_TOKEN}`,
       { signal: AbortSignal.timeout(10_000) },
     );
-    if (!response.ok) return null;
+    if (!response.ok) return { point: null, failed: true };
     const body = (await response.json()) as { features?: { center?: [number, number] }[] };
     const center = body.features?.[0]?.center;
-    if (!center) return null;
-    return { lat: center[1], lng: center[0] };
+    if (!center) return { point: null, failed: false };
+    return { point: { lat: center[1], lng: center[0] }, failed: false };
   } catch {
-    return null;
+    return { point: null, failed: true };
   }
 }
 
@@ -54,13 +61,13 @@ export async function geocodeAddress(
   if (cached && cached.expiresAt > new Date()) {
     return { lat: cached.lat, lng: cached.lng };
   }
-  const live = await mapboxCoordinates(addressKey);
-  const provider = live ? "mapbox" : "deterministic-dev";
+  const { point: live, failed } = await mapboxCoordinates(addressKey);
+  const provider = live ? "mapbox" : failed ? "mapbox-error-fallback" : "deterministic-dev";
   const point = live ?? deriveGeoPoint(addressKey);
   // Unauthenticated probes (addresses/validate) read the cache but must not
   // grow it — caller-chosen keys would bloat the table unboundedly.
   if (options?.persist === false) return point;
-  const expiresAt = new Date(Date.now() + TTL_MS);
+  const expiresAt = new Date(Date.now() + (live ? HIT_TTL_MS : MISS_TTL_MS));
   await prisma.geocodeCache.upsert({
     where: { addressKey },
     update: { lat: point.lat, lng: point.lng, provider, fetchedAt: new Date(), expiresAt },
