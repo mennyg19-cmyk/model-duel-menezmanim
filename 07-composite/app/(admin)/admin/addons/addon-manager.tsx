@@ -21,6 +21,7 @@ export function AddonManager({ addOns }: { addOns: ManagedAddOn[] }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,6 +56,16 @@ export function AddonManager({ addOns }: { addOns: ManagedAddOn[] }) {
     router.refresh();
   }
 
+  async function onEditSubmit(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await patch(id, {
+      name: String(form.get("editName") ?? ""),
+      priceDollars: Number(String(form.get("editPriceDollars") ?? "0")),
+    });
+    setEditingId(null);
+  }
+
   return (
     <div className="mt-6">
       <form onSubmit={onCreate} className="flex flex-wrap items-end gap-2 rounded-md border border-stone-200 bg-white p-4">
@@ -77,27 +88,54 @@ export function AddonManager({ addOns }: { addOns: ManagedAddOn[] }) {
           </tr>
         </thead>
         <tbody>
-          {addOns.map((addOn) => (
-            <tr key={addOn.id} className="border-b border-stone-100">
-              <td className="py-2.5 pr-4 font-medium text-stone-900">{addOn.name}</td>
-              <td className="py-2.5 pr-4">{formatCents(addOn.priceCents)}</td>
-              <td className="py-2.5 pr-4 text-stone-600">
-                {addOn.productCount} product{addOn.productCount === 1 ? "" : "s"}
-              </td>
-              <td className="py-2.5 pr-4">
-                {addOn.active ? <Badge tone="green">Active</Badge> : <Badge tone="stone">Hidden</Badge>}
-              </td>
-              <td className="py-2.5 text-right">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => patch(addOn.id, { active: !addOn.active })}
-                >
-                  {addOn.active ? "Deactivate" : "Activate"}
-                </Button>
-              </td>
-            </tr>
-          ))}
+          {addOns.map((addOn) =>
+            editingId === addOn.id ? (
+              <tr key={addOn.id} className="border-b border-stone-100 bg-stone-50">
+                <td colSpan={5} className="py-2.5">
+                  <form
+                    onSubmit={(event) => onEditSubmit(event, addOn.id)}
+                    className="flex flex-wrap items-end gap-2"
+                  >
+                    <Input name="editName" defaultValue={addOn.name} required className="max-w-xs" />
+                    <Input
+                      name="editPriceDollars"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={(addOn.priceCents / 100).toFixed(2)}
+                      required
+                      className="max-w-[8rem]"
+                    />
+                    <Button type="submit" size="sm">
+                      Save
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                  </form>
+                </td>
+              </tr>
+            ) : (
+              <tr key={addOn.id} className="border-b border-stone-100">
+                <td className="py-2.5 pr-4 font-medium text-stone-900">{addOn.name}</td>
+                <td className="py-2.5 pr-4">{formatCents(addOn.priceCents)}</td>
+                <td className="py-2.5 pr-4 text-stone-600">
+                  {addOn.productCount} product{addOn.productCount === 1 ? "" : "s"}
+                </td>
+                <td className="py-2.5 pr-4">
+                  {addOn.active ? <Badge tone="green">Active</Badge> : <Badge tone="stone">Hidden</Badge>}
+                </td>
+                <td className="py-2.5 text-right space-x-2">
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(addOn.id)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => patch(addOn.id, { active: !addOn.active })}>
+                    {addOn.active ? "Deactivate" : "Activate"}
+                  </Button>
+                </td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
     </div>
