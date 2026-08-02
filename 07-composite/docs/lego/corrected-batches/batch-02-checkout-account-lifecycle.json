@@ -1,0 +1,257 @@
+[
+  {
+    "id": "R-032",
+    "name": "Fulfillment/shipping selection + rate resolution + rules",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "domain/shipping.ts (selectShippingMargin/planShipment/quotePackage) + domain/fulfillment-fees.ts cover pickup/bulk/per-package/shipping with a charge-highest-buy-cheapest margin engine; quoteDraftShipping persists quotes for reconciliation. Unit-tested in shipping.test.ts (its imports reference a since-flattened src/domain path \u2014 an extraction/tsconfig artifact shared by every true-arm export, not a logic defect)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 (lib/checkout/fees.ts, lib/shipping/margin.ts, lib/shipping/quotes.ts)."},
+      "arm-03": {"score": 9, "flags": [], "note": "Independently-built but equally thorough: lib/shipping/margin.ts (selectMargin/quoteMargin) + lib/shipping/bin-packing.ts (first-fit-decreasing) + lib/shipping/checkout-rates.ts (live Shippo resolution, zip blocking) + lib/checkout/delivery.ts (Purim-day gating)."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/shipping/margin.ts handles multi-carton boxes via combineParcelRates/planMargin \u2014 a more elaborate box-combination model than the other five arms; lib/checkout/fees.ts resolveFulfillmentFees adds a free-shipping threshold rule."},
+      "arm-05": {"score": 6, "flags": [], "note": "Real margin engine (selectMarginRate, quoteCheckoutShipping) with box-fit selection and per-carrier margin capture; checkout.ts enforces zip block + Purim-day requirement server-side. But no live per-recipient rate preview before submit \u2014 UI literally says 'Delivery fees are calculated when checkout begins,' and blocked/zip-ineligible methods aren't visually disabled in the picker."},
+      "arm-06": {"score": 9, "flags": [], "note": "Same fee-matrix logic as the clone cluster (fees.ts/margin.ts are line-for-line identical) plus live per-recipient Shippo quotes rendered inline in the fulfillment dropdown before submit (quoteCheckoutShipping at page load), with per-option disabled state for blocked zips/unavailable shipping."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "domain/shipping.ts; domain/fulfillment-fees.ts; shipping.test.ts", "arm-05": "lib/checkout.ts; lib/shipping.ts", "arm-06": "lib/checkout/fees.ts; lib/shipping/margin.ts; app/(storefront)/checkout/page.tsx"}
+  },
+  {
+    "id": "R-033",
+    "name": "Card + offline checkout",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Hosted Stripe Checkout (app/api/checkout/stripe/route.ts) for card; staff-only CASH/CHECK/COMP posting via app/api/admin/orders/[orderId]/payments/route.ts with recalculatePaymentStatus() run inside the same transaction, plus a dedicated refunds route. Offline payment is a server-enforced staff-only policy, not a customer-facing toggle."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "Independent build, same shape: app/api/checkout/route.ts hosted session for card; app/api/checkout/offline/route.ts -> lib/payments/offline.ts postOfflinePayment/voidPayment with a UNPAID/PARTIAL/PAID/OVERPAID cache, staff-only guard (assertOfflinePaymentStaffOnly), full audit trail, and an automatic PLACED\u2192PAID transition + confirmation email once a cash/check payment covers the total."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/checkout/checkout-service.ts for hosted Stripe; lib/payments/offline-payments.ts provides distinct staff-gated postOfflinePayment/voidPayment/refundPayment operations with partial/overpaid awareness \u2014 the most complete offline-payment surface of the six (post, void, and refund all present, not just post/void)."},
+      "arm-05": {"score": 7, "flags": [], "note": "Hosted Stripe via hand-rolled REST calls (no SDK) plus postOfflinePayment/createPosOrder/voidOfflinePayment/refundStripePayment, gated by wireFormat.source==='POS'. Functional and reasonably complete but the payment-status model is binary (POSTED/VOIDED only, no PARTIAL) \u2014 a partial cash payment reads identically to a full one."},
+      "arm-06": {"score": 9, "flags": [], "note": "postPaymentTx/voidPaymentTx with a proper PARTIAL/PAID/OVERPAID/UNPAID recompute; POS cash/check UI is folded into the same CheckoutForm component used by the storefront (one code path, staff-gated), with graceful 503 handling when Stripe keys aren't configured."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/checkout/stripe/route.ts; app/api/admin/orders/[orderId]/payments/route.ts; domain/checkout.ts", "arm-04": "lib/checkout/checkout-service.ts; lib/payments/offline-payments.ts", "arm-06": "lib/payments/post.ts; lib/checkout/pos.ts"}
+  },
+  {
+    "id": "R-034",
+    "name": "Checkout stock + price validation",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "createOrderFromCart() re-derives priced cart, recipients, fees fresh from the DB every call; any line issue or expectedTotalCents mismatch returns a structured conflict (never creates an order on stale data); guest-vs-registered-email collision guarded."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "lib/checkout/validation.ts's validateCheckoutLines() returns a fully-typed CheckoutConflict union (unassigned / missing_fulfillment / stale_price / stale_addon_price / stock / stale_total / zip_blocked / tampered_price) with per-product and per-add-on demand aggregation for stock \u2014 the most granular conflict taxonomy of the six arms."},
+      "arm-04": {"score": 10, "flags": [], "note": "lib/checkout/validation.ts's findCheckoutConflicts() distinguishes price/stock/unavailable per line, explicitly handles inactive products and removed options, and \u2014 the standout detail \u2014 counts stock demand across the WHOLE order using the exact same demand-aggregation function that finalize() later uses to reserve inventory, so a conflict the checkout screen didn't warn about can never appear at finalize time. No other arm shares that counting function between preview and commit."},
+      "arm-05": {"score": 7, "flags": [], "note": "assertLiveOrder() re-checks price and stock per line and throws a specific message per failure, and totals are compared against the stored subtotal \u2014 correct, but conflicts surface as a single thrown string rather than a structured price/stock report, so the client can't render itemized diffs."},
+      "arm-06": {"score": 9, "flags": [], "note": "repriceAndCheckStock() returns a structured report (priceConflicts[] + stockIssues[] with requested/available counts), backorder-aware, option/add-on aware; the checkout UI renders both lists distinctly on a 409."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-01",
+    "evidence": {"arm-04": "lib/checkout/validation.ts (findCheckoutConflicts, shared demand counting with finalize)", "arm-01": "domain/checkout.ts (createOrderFromCart, findCheckoutConflicts)", "arm-03": "lib/checkout/validation.ts (validateCheckoutLines)"}
+  },
+  {
+    "id": "R-035",
+    "name": "Checkout success experience",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Dedicated /checkout/success page: looks up the order by draftReference, shows a distinct 'still confirming' state if the webhook hasn't landed yet vs. the finalized/paid state, and clears the guest draft cookie via HMAC-verified token match only once the draft is FINALIZED."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "app/(storefront)/checkout/success/success-inner.tsx polls /api/checkout?draft=... and does render a real 'still DRAFT / not finalized yet' error state \u2014 but if that status fetch itself fails for any reason (json.ok false), the fallback branch shows 'Order placed. Thank you.' instead of an error, a fail-open bug in the one place a customer most needs an accurate status. Guest-draft cookie clearing (guest_success) is otherwise correctly gated on a non-DRAFT order."},
+      "arm-04": {"score": 9, "flags": [], "note": "Dedicated app/(storefront)/order/confirmation/page.tsx renders distinct paid / awaiting-confirmation / cancelled states server-side off the order's real status."},
+      "arm-05": {"score": 2, "flags": ["BROKEN", "STUB"], "note": "createProviderCheckout() sets Stripe's success_url to /checkout/success, but no such route exists anywhere in the app (only /checkout/local, a dev-only harness that never talks to real Stripe). A real customer completing a live Stripe payment is redirected to a 404. Success state is untested and unreachable in production configuration."},
+      "arm-06": {"score": 9, "flags": [], "note": "Success/still-processing/discarded states are all rendered inline on the same /checkout page keyed off order.status and a paid=1 query flag, with the guest draft cookie cleared exactly once on the FINALIZED branch \u2014 functionally equivalent design, no separate route needed."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/checkout/success/page.tsx", "arm-04": "app/(storefront)/order/confirmation/page.tsx", "arm-06": "app/(storefront)/checkout/page.tsx"}
+  },
+  {
+    "id": "R-036",
+    "name": "Payment recalculation on order changes",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "recalculatePaymentStatus() sums POSTED payments vs order total inside the same transaction as every post/refund/webhook write, producing UNPAID/PARTIALLY_PAID/PAID/REFUNDED. Correct and consistently used from four call sites, but has no OVERPAID branch \u2014 an over-payment is simply reported as PAID."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "computeCachedPaymentStatus()/recalcOrderPaymentStatus() in lib/payments/offline.ts produce UNPAID/PARTIAL/PAID/OVERPAID, run inside the same transaction as every post/void, are staff-permission gated, and automatically fire the order's PLACED\u2192PAID transition plus a confirmation email once the cache reads PAID/OVERPAID."},
+      "arm-04": {"score": 9, "flags": [], "note": "recomputeOrderPaymentStatus() in lib/orders/payment-status.ts takes a `SELECT ... FOR UPDATE` row lock on the order before recounting, so two concurrent payment postings can't both compute against the same stale total \u2014 the most concurrency-rigorous implementation of the six arms \u2014 and nets out refunds against a payment rather than double-subtracting. Exercised by a dedicated order-lifecycle.test.ts covering UNPAID\u2192PARTIALLY_PAID\u2192PAID transitions."},
+      "arm-05": {"score": 5, "flags": [], "note": "Status is set inline at each payment/void/refund call site (paymentStatus: activePayments ? 'POSTED' : 'VOIDED') rather than through one shared recompute function, and the PaymentStatus enum itself has no PARTIAL \u2014 a partial payment and a full payment both read POSTED. Real but materially less correct than the other arms."},
+      "arm-06": {"score": 9, "flags": [], "note": "recomputePaymentStatus()/classifyPaymentStatus() sum POSTED payments vs total inside the same transaction as post/void, and add an OVERPAID state beyond the clone cluster's UNPAID/PARTIAL/PAID/COMPED set; a standalone recalculatePaymentStatus() export exists for any external caller."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-04",
+    "evidence": {"arm-04": "lib/orders/payment-status.ts (recomputeOrderPaymentStatus, FOR UPDATE lock)", "arm-03": "lib/payments/offline.ts (computeCachedPaymentStatus, recalcOrderPaymentStatus)", "arm-06": "lib/payments/post.ts (recomputePaymentStatus, classifyPaymentStatus)"}
+  },
+  {
+    "id": "R-037",
+    "name": "Checkout recipient/donation summary + per-recipient delivery + bulk + live shipping + guest email + conflict/price UI",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "CheckoutForm shows per-item summary, per-recipient fulfillment radio group (with disabled+titled out-of-zone options), Purim-day picker, per-recipient + order-default greeting, donation input, live-refetched quote (items/fees/total) on any choice change, and a structured conflict banner with an 'Adjust my order' link on 409. Guest contact (name+email) captured inline when unauthenticated."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "checkout-client.tsx shows the recipient/greeting/donation summary and a running total, but fees do not refresh live when a fulfillment method changes \u2014 the client only re-quotes on an explicit Pay/Refresh action, so the displayed total can be visibly stale for several interactions before it self-corrects."},
+      "arm-04": {"score": 9, "flags": [], "note": "The checkout page is a server component re-rendered fresh on every server action (delivery-day pick, greeting save), so there is no client-side staleness window at all; explicit isPayable gate disables the Pay button with a contextual reason, guest contact fields (name/email/phone) render inline, and stale-conflict/unassigned-line panels sit above the pay form. A different but equally valid mechanism for 'always current' than live client refetching."},
+      "arm-05": {"score": 4, "flags": [], "note": "CheckoutFlow shows per-recipient fulfillment select + greeting + donation + a running total, but no live fee breakdown before submit (fees only appear after the POST), no explicit bulk-vs-per-package fee display, no guest email field anywhere in the flow (guests are created as bare 'Guest Checkout' customer rows with no email captured at all), and conflicts on failure surface as one flat message string, not itemized."},
+      "arm-06": {"score": 9, "flags": [], "note": "CheckoutForm mirrors the clone cluster's summary/greeting/donation UI, adds live per-recipient Shippo quotes inline in the fulfillment dropdown, a structured conflict panel (separate price-conflict and stock-issue lists) with a reload action, and graceful 'card unavailable' messaging distinct from a hard error. Guest email is captured up front at draft-save time (findOrCreateGuestCustomer), carried through to checkout."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/checkout-form.tsx", "arm-04": "app/(storefront)/order/checkout/page.tsx; lib/checkout/checkout-summary.ts", "arm-06": "app/(storefront)/checkout/checkout-form.tsx; lib/customers/dedupe.ts"}
+  },
+  {
+    "id": "R-038",
+    "name": "Account dashboard + auth-gated nav",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "AccountDashboardPage checks getAuthenticatedCustomer() server-side and never queries or renders order data for an unauthenticated visitor (shows an inline 'Sign in to view your account' card instead of leaking a redirect target); AccountLayout renders a persistent Dashboard/Profile/Address book nav on every subpage. No separate 'Orders' nav item \u2014 history lives directly on the dashboard."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 4, "flags": [], "note": "AccountPage is a client component that renders unconditionally and defers the auth check to a client-side fetch of /api/account; an unauthenticated visitor briefly renders the shell then sees an inline 'Sign in required' message client-side rather than being redirected server-side, and there is no persistent account nav \u2014 profile/addresses/orders/drafts are all flattened into one dashboard component with no distinct routes to gate. The same client-fetch weakness the original grading flagged in arm-05."},
+      "arm-04": {"score": 9, "flags": [], "note": "app/(storefront)/account/session.ts's requireSignedInCustomer() performs a real server-side redirect before any account data loads (the strictest gating pattern of the six); AccountLayout renders a structured, persistent nav across every account subpage."},
+      "arm-05": {"score": 4, "flags": [], "note": "'/account' page renders unconditionally server-side and defers the auth check to a client fetch of /api/account; an unauthenticated visitor sees an inline 'Sign in to view your account' message instead of being redirected, and there is no sub-nav at all \u2014 profile/addresses/orders are all flattened into one dashboard component with no distinct routes to gate."},
+      "arm-06": {"score": 9, "flags": [], "note": "AccountLayout calls requireCustomer() server-side (redirects/throws before any data loads) and renders a real 4-link nav (Dashboard/Orders/Addresses/Profile) plus sign-out, shared across every account subpage."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/layout.tsx; app/(storefront)/account/page.tsx", "arm-04": "app/(storefront)/account/session.ts; app/(storefront)/account/layout.tsx", "arm-06": "app/(storefront)/account/layout.tsx"}
+  },
+  {
+    "id": "R-039",
+    "name": "Customer order history + detail",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Order history is embedded directly in the dashboard (up to 20 orders, status/total/Details+Continue links); account/orders/[orderId] shows the full line/recipient breakdown, scoped to customerId, 404ing identically for a foreign or bad id."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "account-dashboard.tsx lists every order (ref/number, status, season, line count); account/orders/[id]/page.tsx shows the full detail breakdown \u2014 both history and detail are genuinely present, unlike the badly-mislabeled assumption that this tree only had arm-02's build."},
+      "arm-04": {"score": 9, "flags": [], "note": "account/orders/page.tsx lists customer orders; account/orders/[orderId]/page.tsx shows the full breakdown with ownership enforced via requireSignedInCustomer + an owner filter on the query."},
+      "arm-05": {"score": 3, "flags": ["MISSING"], "note": "AccountDashboard lists orders (ref, item count, total, status) but there is no order-detail route anywhere in app/ \u2014 no line items, no recipient/address breakdown, no per-order page at all. History exists; detail does not."},
+      "arm-06": {"score": 9, "flags": [], "note": "account/orders lists history; account/orders/[id] shows full recipient-grouped line/greeting/total breakdown plus an 'unassigned' section, ownership-checked via notFound() on any mismatch."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/page.tsx; app/(storefront)/account/orders/[orderId]/page.tsx", "arm-04": "app/(storefront)/account/orders/page.tsx; app/(storefront)/account/orders/[orderId]/page.tsx", "arm-06": "app/(storefront)/account/orders/[id]/page.tsx"}
+  },
+  {
+    "id": "R-040",
+    "name": "Continue/pay/cancel a draft",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Order detail page renders 'Continue and pay' (\u2192/order?draft=) plus a CancelDraftButton (confirm() + delete) for any DRAFT order \u2014 both wired end-to-end from the real UI."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["STUB"], "note": "'Continue' and 'Cancel' both work from the dashboard's draft-list rows (PATCH .../drafts/[draftRef] action=cancel is real and wired). But the direct 'Pay' action from the dashboard is a literal disabled placeholder: `<span title=\"Checkout / pay ships in P5\">Pay (P5)</span>` \u2014 an announced-but-unshipped feature sitting in the shipped build. Paying is only reachable indirectly by continuing into the order builder and using its 'Continue to checkout' link."},
+      "arm-04": {"score": 9, "flags": [], "note": "Order detail page's cancelDraftAction (server action \u2192 discardDraft) is wired to a real Cancel form; continuing/paying routes through the builder \u2192 checkout page. Both actions are exercised in cart-builder.test.ts, including a cross-customer discard rejection."},
+      "arm-05": {"score": 3, "flags": ["MISSING", "STUB"], "note": "The account dashboard shows only a 'Continue or cancel' link that routes to /order (the builder) \u2014 there is no distinct pay action from the dashboard, and no cancel/discard is reachable anywhere: discardOrder() in lib/orders.ts is fully implemented and unit-tested but has zero callers in app/ or api/, and the draft route (app/api/order/drafts/[draftId]/route.ts) exposes only GET/PUT, no DELETE."},
+      "arm-06": {"score": 9, "flags": [], "note": "Order detail page renders Continue editing (\u2192/order?draft=), Go to checkout, and a CancelDraftButton, all draft-status-gated; cancelDraft() releases any stock reservation and flips the order to DISCARDED through the same state machine as R-046."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/account/orders/[orderId]/page.tsx", "arm-03": "components/account/account-dashboard.tsx (disabled 'Pay (P5)'); components/order/cart-sidebar.tsx", "arm-06": "app/(storefront)/account/orders/[id]/cancel-draft-button.tsx; lib/orders/drafts.ts"}
+  },
+  {
+    "id": "R-041",
+    "name": "Repeat a prior customer order",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "domain/repeat-orders.ts builds a full review per line (same/replacement/unmapped with price-smart fallback candidates), carries active options/add-ons only when the same product is kept, flags invalid recipient snapshots; reachable end-to-end from both app/api/order/repeat/route.ts and an admin equivalent, with dedicated storefront + admin review pages."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "app/api/account/orders/[id]/repeat/route.ts drives a BFS replacement-chain walk per line and creates a new draft seeded with per-line candidate lists; a review page exists. Solid and reachable, though the candidate BFS re-queries the DB per line rather than a single preloaded catalog map."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/orders/repeat-review.ts's readRepeatReview()/confirmRepeat() implement a two-tick confirmation flow (nothing becomes a draft until the customer explicitly confirms the mapped plan), reachable from account/orders/[orderId]/repeat/page.tsx."},
+      "arm-05": {"score": 7, "flags": [], "note": "createRepeatDraft() walks the replacement chain per line (BFS across ProductReplacement edges), price-sorts candidates, and creates a new draft order seeded with per-line candidate lists; a dedicated /repeat/[draftId] review page exists. Solid, though the candidate BFS re-queries the DB per line rather than a single catalog fetch like the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "buildRepeatPlan()/RepeatReview page mirrors the clone cluster's design (chain-resolved vs. price-smart mapping, per-recipient confirmation before anything becomes a draft), reachable from both the order-detail page and the account dashboard."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "domain/repeat-orders.ts; app/api/order/repeat/route.ts", "arm-04": "lib/orders/repeat-review.ts; app/(storefront)/account/orders/[orderId]/repeat/page.tsx", "arm-06": "lib/repeat/plan.ts; lib/repeat/chain.ts"}
+  },
+  {
+    "id": "R-042",
+    "name": "Customer profile management (ownership-enforced)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "ProfileForm PATCHes /api/account/profile; the route reads the customer only from the session (no id ever comes from the request), updates name/phone with dedupe-safe P2002 handling on phoneNormalized."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "app/api/account/profile/route.ts PATCHes only the session-resolved customerId (resolveCustomerId(), never trusts a request-supplied id), updates displayName/phone with normalization."},
+      "arm-04": {"score": 9, "flags": [], "note": "saveProfileAction server action calls requireSignedInCustomer() then updateCustomerProfile(customer, ...) \u2014 the customer object itself, not an id parameter, so there is nothing to abuse."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "The account dashboard's 'Profile' card is read-only text ('Add your email during checkout') with no edit form; /api/account exposes GET only \u2014 there is no PATCH/PUT anywhere in the app for updating a customer's own name/email/phone. Genuinely absent, not just under-linked."},
+      "arm-06": {"score": 9, "flags": [], "note": "ProfileForm + profile route update the session customer's own row only (no id parameter to abuse), matching the clone cluster's design 1:1."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/account/profile/route.ts", "arm-04": "app/(storefront)/account/actions.ts (saveProfileAction)", "arm-06": "app/(storefront)/account/profile/page.tsx; app/(storefront)/account/profile/profile-form.tsx"}
+  },
+  {
+    "id": "R-043",
+    "name": "Saved-address account view",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "account/addresses is genuinely read-only \u2014 it renders address cards ('New recipients from an order are saved here automatically') with no add/edit/delete affordance on the page at all. Full CRUD API routes do exist (app/api/account/addresses, [addressId]) but are only ever called from the checkout recipient dialog, not from the account address book itself. The same read-view-with-an-unlinked-edit-endpoint pattern the original grading flagged in arm-05."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "account/addresses/page.tsx supports in-page Edit via a modal (PATCH /api/addresses/[id]) with real form fields \u2014 better than a pure view \u2014 but there is no Add or Delete affordance on the page itself, only Edit of existing rows."},
+      "arm-04": {"score": 8, "flags": [], "note": "account/addresses/page.tsx + address-book-form.tsx support Add, Edit, and archive (soft-delete via archiveAddressAction) directly on the account page \u2014 genuine full CRUD, the most complete of the six."},
+      "arm-05": {"score": 6, "flags": [], "note": "The account dashboard lists saved addresses (name + full address) read-only \u2014 satisfies 'view' literally, and an address-update endpoint exists (app/api/addresses/[addressId]/route.ts) even though the account page doesn't surface an edit affordance for it."},
+      "arm-06": {"score": 8, "flags": [], "note": "account/addresses + address-book.tsx render the saved book with add/edit/delete, on par with the clone cluster."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {"arm-04": "app/(storefront)/account/addresses/page.tsx; address-book-form.tsx (add/edit/archive)", "arm-06": "app/(storefront)/account/addresses/page.tsx; app/(storefront)/account/addresses/address-book.tsx", "arm-01": "app/(storefront)/account/addresses/page.tsx (read-only); app/api/account/addresses/route.ts"}
+  },
+  {
+    "id": "R-044",
+    "name": "Order status state machine + transitions",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "domain/order-engine.ts's ALLOWED_ORDER_TRANSITIONS map + assertOrderTransition() is real and unit-tested (domain-core.test.ts) for legal/illegal pairs, and discardDraft() uses a consistent guarded-updateMany pattern. But the highest-stakes transition \u2014 DRAFT\u2192FINALIZED on a real Stripe payment \u2014 is handled by app/api/stripe/webhook/route.ts calling domain/checkout.ts's commitStripePayment(), which writes status:'FINALIZED' directly and never calls assertOrderTransition at all. The tested 'shared' state machine does not actually gate the order's most important transition in production."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "lib/orders/state-machine.ts's ALLOWED map + assertOrderTransition() is the one implementation actually used everywhere: lib/orders/finalize.ts's finalizeOrder() calls it, and that finalizeOrder() is in turn the function called by the Stripe webhook, the offline-payment poster, and the ops test console. No duplication between 'tested' and 'real' paths."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/orders/state-machine.ts's checkOrderTransition() backs a richer, more realistic status model than any other arm \u2014 DRAFT/PLACED/CANCELLED/IN_FULFILLMENT/COMPLETED, not just draft-or-placed \u2014 exercised via transitionOrder() from both customer cancellation and staff fulfillment-pipeline actions, with the most extensive test coverage of the six (order-lifecycle.test.ts, order-numbers.test.ts, payments.test.ts, inventory.test.ts all exercise it directly)."},
+      "arm-05": {"score": 6, "flags": [], "note": "assertOrderTransition() with the same DRAFT\u2192{FINALIZED,DISCARDED} map, version-guarded updateMany, and real unit + DB-backed concurrency tests (race finalize vs. discard). Correct and tested, but finalizeOrder()/discardOrder() in lib/orders.ts are never called from any route \u2014 the live webhook path (completeCheckout) reimplements finalize inline instead of calling this module, so the 'shared' state machine is partially duplicated/dead code in production paths."},
+      "arm-06": {"score": 9, "flags": [], "note": "Same ORDER_TRANSITIONS map + IllegalTransitionError/OrderConcurrencyError, and finalizeOrderTx is the one real implementation called from both the webhook and POS paths (no duplication)."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {"arm-04": "lib/orders/state-machine.ts (checkOrderTransition); order-lifecycle.test.ts", "arm-03": "lib/orders/state-machine.ts (assertOrderTransition); lib/orders/finalize.ts", "arm-06": "lib/orders/state-machine.ts; scripts/test-state-machine.mts"}
+  },
+  {
+    "id": "R-045",
+    "name": "Order finalization (draft \u2192 placed, claims number)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "The real, reachable finalize path lives inline in domain/checkout.ts's commitStripePayment() (called from the Stripe webhook): row-locks the order (FOR UPDATE), re-validates conflicts, reserves inventory, claims the next order number by incrementing Season.nextOrderNumber, materializes packages, upserts the Payment row \u2014 all in one transaction, with webhook-event replay protection. Correct and reachable, but it duplicates domain/order-engine.ts's separate finalizeOrder() (which claims numbers via assertOrderTransition + a 3-attempt serializable retry loop) \u2014 that tested function is only ever called from test files and a smoke script, never from a real route."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": [], "note": "lib/orders/finalize.ts's finalizeOrder() locks the season row (FOR UPDATE) to claim the next order number, reserves inventory, groups lines into packages, and is the single implementation called from the Stripe webhook, the offline-payment poster, and the ops console \u2014 no duplicate path."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/orders/order-service.ts's finalizeOrder() is extensively documented (why shipping quotes are fetched before the transaction opens, why the sequence has no gaps), used by both the customer checkout-service and the POS counter flow, and covered by the largest finalize-specific test surface of the six arms (order-lifecycle.test.ts, order-numbers.test.ts, fulfillment.test.ts, inventory.test.ts, routes.test.ts)."},
+      "arm-05": {"score": 7, "flags": [], "note": "The real, reachable finalize path lives inline in completeCheckout() (webhook handler): season row locked FOR UPDATE, sequential nextOrderNumber claimed, stock reserved per line, payment posted, package materialization triggered \u2014 all in one transaction. Correct and reachable, but duplicates lib/orders.ts's separate (unused) finalizeOrder(), so the 'real' finalize logic isn't the unit-tested one."},
+      "arm-06": {"score": 9, "flags": [], "note": "finalizeOrderTx() claims the order number, flips status with a guarded updateMany, materializes packages, and enqueues the confirmation email all in one transaction; it is the single implementation called from both the checkout webhook (commitSubmittedOrder) and the POS finalize path \u2014 no duplication."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-03",
+    "evidence": {"arm-04": "lib/orders/order-service.ts (finalizeOrder); order-lifecycle.test.ts", "arm-03": "lib/orders/finalize.ts (finalizeOrder); lib/payments/webhook.ts", "arm-06": "lib/orders/state-machine.ts (finalizeOrderTx); lib/checkout/finalize.ts"}
+  },
+  {
+    "id": "R-046",
+    "name": "Draft discard",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "domain/order-engine.ts's discardDraft() uses a guarded updateMany(where: status=DRAFT) so a concurrent second discard is a no-op count rather than a clobber, is unit-tested for the illegal-transition and race cases, and is genuinely called from app/api/order/drafts/[draftId]/route.ts's DELETE handler \u2014 unlike finalize, discard is not duplicated here."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "cancelDraft() in lib/orders/drafts.ts is real and correctly wired end-to-end (dashboard Cancel button \u2192 PATCH .../drafts/[draftRef] action=cancel), but it's a separate, manual status===DRAFT check-and-update rather than routing through lib/orders/state-machine.ts's assertOrderTransition \u2014 a second, ad-hoc implementation of the same guard that lib/orders/finalize.ts's (unused for this purpose) discardDraft() already provides properly."},
+      "arm-04": {"score": 9, "flags": [], "note": "discardDraft() in lib/orders/order-service.ts is the single implementation used by both the customer's cancelDraftAction and the admin POS discard action, and is exercised by cart-builder.test.ts including an explicit cross-customer rejection test."},
+      "arm-05": {"score": 2, "flags": ["STUB", "MISSING"], "note": "discardOrder() in lib/orders.ts is correct and covered by real DB-backed concurrency tests (finalize-vs-discard race), but it has zero callers anywhere in app/ or api/ \u2014 no route, no UI action reaches it. A customer literally cannot discard a draft in this build; the dashboard's 'Continue or cancel' link only routes to the builder page, which has no cancel affordance either. Well-tested dead code, not a working feature."},
+      "arm-06": {"score": 9, "flags": [], "note": "cancelDraft() releases any stock reservation and flips DRAFT\u2192DISCARDED through the shared state machine, wired to CancelDraftButton on the order-detail page and exercised end-to-end."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "domain/order-engine.ts (discardDraft); app/api/order/drafts/[draftId]/route.ts", "arm-04": "lib/orders/order-service.ts (discardDraft); app/(storefront)/account/actions.ts", "arm-06": "lib/orders/drafts.ts (cancelDraft); app/(storefront)/account/orders/[id]/cancel-draft-button.tsx"}
+  },
+  {
+    "id": "R-047",
+    "name": "Draft reference numbers + wire format",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "formatDraftReference() produces a simple zero-padded sequential code (D-00000042), unit-tested ('draft references use the stable wire format') and shown to the customer as their reference on the order-detail page while a DRAFT. Real and functional, but simpler than the old (mislabeled) grading claimed \u2014 there is no distinct 'TOMCHEI D-XXXXXXXX' bank-transfer template, no letter-based unambiguous alphabet, and no checksum; the reference number and the 'wire format' are the same plain digit string."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": [], "note": "lib/orders/draft-wire.ts's formatDraftRef()/parseDraftRef() produce D-{seasonYear}-{hex-suffix}, real and used in every production draft-creation path (lib/orders/drafts.ts). Functions as a genuine reference number, but the hex alphabet has no phone-safety consideration (mixed digits/letters, no 0/O or 1/I avoidance) and no checksum, and it reads as an internal draftRef id rather than a customer-facing payment reference."},
+      "arm-04": {"score": 10, "flags": [], "note": "lib/orders/draft-reference.ts's createDraftReference()/parseDraftReference() use Crockford base32 (excludes I/L/O/U), append a mod-32 checksum symbol, and maintain a spoken-letter substitution table (O\u21920, I/L\u21921) so a reference read back to staff over the phone self-corrects common mishearings before the checksum is even checked. Clearly documented rationale in-file. The single most sophisticated implementation of this requirement across all six arms."},
+      "arm-05": {"score": 4, "flags": [], "note": "draftReference is a real unique code (DRAFT-<hex>/REPEAT-<hex>), but there is no customer-facing 'wire format' payment-reference concept at all \u2014 the schema field named wireFormat is repurposed as a generic JSON blob storing the draft's cart/checkout state, unrelated to a bank-transfer reference string. Half the requirement (reference numbers) is solid; the other half (a wire format customers actually use to pay) doesn't exist."},
+      "arm-06": {"score": 8, "flags": [], "note": "claimDraftRef()/claimOrderNumber() are atomic per-season sequential claims; formatWireFormat() renders 'MM-<Season>-0042' as the printed order label used on paperwork/receipts \u2014 a different but equally coherent interpretation of 'wire format' (packing-slip label rather than bank-transfer reference), fully wired into finalize and shown on the order-detail page."}
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-02",
+    "evidence": {"arm-04": "lib/orders/draft-reference.ts (createDraftReference, parseDraftReference, checksum + spoken-letter map)", "arm-06": "lib/orders/numbers.ts (formatWireFormat, claimDraftRef)", "arm-01": "domain/order-engine.ts (formatDraftReference)"}
+  },
+  {
+    "id": "R-048",
+    "name": "Cross-season product replacement chain",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "domain/repeat-orders.ts's resolveReplacementChain() walks Product.replacementProductId hop by hop with a visited-set cycle guard, landing on the first ACTIVE product in the target season; feeds both customer repeat and staff auto-repeat via app/api/order/repeat/route.ts and an admin equivalent."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": [], "note": "lib/catalog/replacements.ts does a BFS over replacement edges, visited-set guarded, collecting reachable ACTIVE products in the target season, exposed via app/api/admin/replacements/resolve/route.ts. Correct and arguably more thorough (multiple candidates) than a single-path walk, though it re-queries the DB per BFS level."},
+      "arm-04": {"score": 9, "flags": [], "note": "lib/catalog/replacements.ts's resolveReplacements() does slug-based matching with a hop-limited chain walk and price-smart fallback suggestions when no direct replacement exists."},
+      "arm-05": {"score": 7, "flags": [], "note": "replacementCandidates() does a BFS over ProductReplacement edges (source\u2192target), visited-set guarded, collecting every reachable ACTIVE product in the target season and sorting by price proximity \u2014 correct and arguably more thorough (multiple candidates, not just the first hit) than a single-path walk, though it re-queries the DB per BFS level rather than a preloaded catalog map."},
+      "arm-06": {"score": 9, "flags": [], "note": "resolveReplacementChain() walks Product.replacedById with a visited set and max-hop cap, distinguishing a genuine dead end from an active landing; replacementChainPreview() renders the full 'Old \u2192 Mid \u2192 New' chain for the admin product page."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "domain/repeat-orders.ts (resolveReplacementChain)", "arm-04": "lib/catalog/replacements.ts (resolveReplacements)", "arm-06": "lib/repeat/chain.ts (resolveReplacementChain, replacementChainPreview)"}
+  }
+]
