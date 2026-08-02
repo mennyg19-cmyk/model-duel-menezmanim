@@ -1,0 +1,1283 @@
+[
+  {
+    "id": "R-012",
+    "name": "Storewide closed-order banner",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "Storefront layout renders a role=status banner sitewide (not just homepage) using an admin-editable settings string (store.closed_message) whenever no season is open."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01 for these files."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "StorefrontShell renders a fixed '<aside class=closed-banner>' sitewide whenever isOpen is false, with a static message (not admin-configurable)."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "Storefront layout renders a sitewide role=status banner when no season is open, with copy that varies based on whether any closed seasons exist yet \u2014 but message text is hardcoded, not admin-settable like arm-01's."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "app/(storefront)/layout.tsx",
+      "arm-05": "app/components/storefront-shell.tsx",
+      "arm-06": "app/(storefront)/layout.tsx"
+    },
+    "_batch": "batch-01-storefront-order-builder.json"
+  },
+  {
+    "id": "R-020",
+    "name": "Inventory-aware / live-stock package selection",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "Client polls /api/order-builder/stock every 30s and after every autosave, merging live availability over the initial catalog snapshot; Add disabled + 'Out of stock'/'N in stock' shown per product."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01 for these files."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "isProductAvailable() computed from the server-rendered snapshot and re-checked at add-time; Add disabled when sold out. No periodic client refresh, so stock can go stale during a long session."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "Stock computed server-side at page load (product.stock, soldOut) and shown per product card with a low-stock warning; no client-side polling/refresh loop was found, so availability can also go stale during a long session \u2014 same gap as arm-05."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "components/builder/order-builder.tsx (STOCK_REFRESH_MS)",
+      "arm-05": "lib/inventory.ts",
+      "arm-06": "components/order-builder/product-card.tsx"
+    },
+    "_batch": "batch-01-storefront-order-builder.json"
+  },
+  {
+    "id": "R-022",
+    "name": "Save and resume web drafts (autosave + guest clear on success)",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "800ms-debounced autosave with stale-response guarding (pendingEditsRef); guest drafts keyed by HMAC-hashed random token in an httpOnly cookie; completeDraft() clears the guest cookie ONLY on successful checkout, never on abandonment \u2014 exactly matches the spec."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01 for these files."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "700ms-debounced autosave to a server draft keyed by an access token stored in sessionStorage (not httpOnly cookie \u2014 more exposed to XSS than the other arms' approach); resumes on reload via sessionStorage id. Guest-clear-on-success behavior not directly verified in the reviewed slice."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Explicit design comment: signed-in customers autosave to a server draft; guests autosave to localStorage and only get a server draft + httpOnly-cookie access token at checkout identity capture; guest copy clears ONLY on success/explicit cancel, never on refresh \u2014 matches the spec intent, though guest state living in localStorage before checkout is a smaller attack surface than a cookie-backed draft from the first keystroke."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "lib/order-builder/draft-store.ts",
+      "arm-05": "app/components/order-builder.tsx",
+      "arm-06": "components/order-builder/use-auto-save.ts"
+    },
+    "_batch": "batch-01-storefront-order-builder.json"
+  },
+  {
+    "id": "R-023",
+    "name": "Guest checkout access tokens",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "Random 32-byte token minted for guests, httpOnly/sameSite=lax cookie, only the HMAC of the token stored in DB (raw token never persisted) \u2014 anti-enumeration by design since no API accepts a draft id from the client."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01 for these files."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "Guest token exists and is sent via a custom x-draft-access-token header, but the raw token is kept in sessionStorage on the client rather than an httpOnly cookie \u2014 more exposed to XSS/theft than the clone cluster or arm-06's cookie-based approach."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "generateGuestToken/hashGuestToken/verifyGuestToken with url-safe random tokens, hashed storage, httpOnly cookie delivery, and dedicated unit checks (scripts/test-p4.mts) covering uniqueness, determinism, and rejection of wrong/null tokens."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "lib/order-builder/draft-store.ts",
+      "arm-05": "app/components/order-builder.tsx",
+      "arm-06": "lib/orders/guest-token.ts"
+    },
+    "_batch": "batch-01-storefront-order-builder.json"
+  },
+  {
+    "id": "R-025",
+    "name": "Address autocomplete + server-side validation",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "Debounced /api/addresses/autocomplete suggests from the signed-in customer's own saved book only (no cross-customer leak); zod addressInputSchema enforces server-side validation on every address-accepting endpoint."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01 for these files."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No autocomplete/suggestion feature exists anywhere in the codebase (confirmed via grep \u2014 zero matches). Server-side validation is real (zod addressSchema in the address PATCH route) but that's only half the requirement."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "Add-recipient dialog suggests from the customer's own address book as they type (client-side filter, capped list), matching the clone cluster's scope; server-side validation + deliverability check via POST /api/addresses/validate before a recipient is accepted."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "app/api/addresses/autocomplete/route.ts",
+      "arm-05": "app/api/addresses/[addressId]/route.ts",
+      "arm-06": "components/order-builder/add-recipient-dialog.tsx"
+    },
+    "_batch": "batch-01-storefront-order-builder.json"
+  },
+  {
+    "id": "R-054",
+    "name": "Refunds (incl. Stripe refund path)",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "Manager-gated (payments.refund), DB-first money-loss guard (negative payment row + audit commits BEFORE the Stripe call), stable idempotency key derived from intent+amount+prior-refund-state, partial-refund support, rollback on Stripe failure. Wired to a real button on the order page."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01 for this file."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "STUB",
+          "THEATER"
+        ],
+        "note": "Backend (refundStripePayment) is real \u2014 Stripe REST call with idempotency key, DB status update + audit \u2014 but only full refunds (no partial amount), Stripe is called BEFORE the DB update (opposite of the safer DB-first pattern), and critically there is NO UI anywhere that calls this endpoint \u2014 grep across the whole app/ tree found zero references outside the route itself and the webhook. Unreachable feature for a real admin user."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Real Stripe refund via lib/payments/refund, keyless-host guard (422 with operator instructions instead of faking success), local status only flips on Stripe evidence. Wired to a working 'Refund' button per payment row in OrderActions with busy/error state. No partial-refund amount option (full only) \u2014 modest gap vs. arm-01."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "app/api/admin/orders/[id]/refund/route.ts; lib/payments/post-payment.ts",
+      "arm-05": "lib/checkout.ts#refundStripePayment (orphaned)",
+      "arm-06": "app/api/admin/payments/[paymentId]/refund/route.ts; lib/payments/refund.ts"
+    },
+    "_batch": "batch-03-admin-ops-catalog-inventory.json"
+  },
+  {
+    "id": "R-079",
+    "name": "Follow-up call center",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "/admin/follow-up with exactly the spec's 3 filtered work lists \u2014 open balances, unclaimed pickups, undelivered route stops \u2014 each with customer contact detail in the row."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No follow-up/call-center screen exists anywhere. Confirmed by grep (no matches for follow-up|followUp|call-center|unclaimed in lib/) and by arm-05's own AGGREGATE-REVIEW-P9.md, which independently flags this exact deliverable as missing (\"no call-center view, no follow-up filters, no R-079 wiring anywhere\"). Only a passing \"drafts waiting for follow-up\" stat exists in the operations dashboard."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "/admin/follow-ups with reason filters, but the 3 reasons are payment / pickup / bulk-scheduled \u2014 \"bulk-scheduled\" substitutes for the spec's \"undelivered route stops\" category, so it's a close but not exact match to the 3 canonical queues."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "app/(admin)/admin/follow-up/page.tsx (UnpaidList/UnclaimedList/UndeliveredList)",
+      "arm-05": "results/AGGREGATE-REVIEW-P9.md line 68 (self-flagged missing); app/admin/operations/page.tsx (only a passing stat)",
+      "arm-06": "app/(admin)/admin/follow-ups/page.tsx; lib/admin/follow-ups.ts (payment/pickup/bulk reasons)"
+    },
+    "_batch": "batch-04-fulfillment-email.json"
+  },
+  {
+    "id": "R-085",
+    "name": "Email templates + branding",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "Templates tab: per-key subject/body override + enable/disable + reset-to-default. Settings > Email tab has editable from-address, reply-to, and branding-footer inputs that are appended to every outgoing email by the dispatcher."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 2,
+        "flags": [
+          "STUB"
+        ],
+        "note": "updateEmailTemplate() (subject/body/branding) exists in lib/email.ts and is wired to /api/admin/email, but the Settings UI only ever displays templates read-only (\"<strong>{key}</strong> \u00b7 {subject} \u00b7 custom/default branding\") \u2014 no edit form for either subject/body or branding anywhere."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "Templates tab is fully CRUD (create/edit subject+body, save) \u2014 better than the clone cluster's override-only model. However there is NO UI anywhere to edit branding (fromName/fromEmail/footerText) \u2014 getEmailBranding() only reads a seeded setting; Settings > Email only shows delivery mode + a test sender, not branding fields."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "components/admin/email-hub.tsx (TemplatesTab); components/admin/settings/email-tab.tsx (from/reply-to/footer inputs)",
+      "arm-05": "app/admin/settings/page.tsx (templates displayed via <details>, no edit form)",
+      "arm-06": "components/admin/email/templates-tab.tsx (full CRUD); lib/email/render.ts (getEmailBranding \u2014 seed-only, no edit UI)"
+    },
+    "_batch": "batch-04-fulfillment-email.json"
+  },
+  {
+    "id": "R-095",
+    "name": "Settings Shipping tab (rates, rules, delivery ZIPs)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "components/admin/settings/shipping-tab.tsx: editable delivery-ZIP allowlist, an editable named-rate list (add row / remove / save), editable bulk & per-package fee rules, and editable Purim delivery-day choices \u2014 all persisted via the settings API and read live at checkout."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical shipping-tab.tsx."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/02."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "arm-04's diffs don't touch settings/shipping-tab.tsx."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [],
+        "note": "Settings page Shipping section has only editable delivery-ZIP textarea and delivery-dates textarea; no rate table and no fee-rule editor anywhere \u2014 text even says 'Live carrier rates arrive in P8.'"
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "settings-tabs.tsx Shipping tab: editable ZIP allowlist, editable bulk/per-package delivery fees, editable delivery days \u2014 all live-persisted. The 'Shipping rules' section is present but read-only/display-only (no add/edit form), slightly thinner than the clone cluster's fully editable rate+rule tables."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "components/admin/settings/shipping-tab.tsx:1-128",
+      "arm-05": "app/admin/settings/page.tsx:96",
+      "arm-06": "app/(admin)/admin/settings/settings-tabs.tsx:273-357"
+    },
+    "_batch": "batch-05-reporting-config-design.json"
+  },
+  {
+    "id": "R-114",
+    "name": "Customer identity linking + owned profile updates",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/customers.ts findOrLinkCustomer() links a Customer row by clerkUserId (clerk mode) or matches by email (dev mode, DECISION-P4-6: match by email only, never phone). PATCH /api/account/profile reads the customer id ONLY from the session cookie (getCustomerContext()) -- never accepts a client-supplied id -- and updates name/phone with a unique-phone conflict handled as 409. Clean ownership enforcement."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical profile route; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "Identity linking exists (findCustomerForRequest resolves a Clerk-authenticated user to a Customer row in lib/order-builder.ts getAccount), but there is NO profile-update endpoint anywhere -- app/api/account/route.ts only implements GET (read-only account view + orders). 'Owned profile updates' is absent."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "app/api/account/profile/route.ts + lib/customers/session.ts scope updates to the session's own customerId; clerkUserId column present on Customer for future linking. Solid, though undermined by the same broken customer-sign-in story noted under R-108 -- the ownership check is well-written code that customers in production have no real way to reach."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "lib/customers.ts:29-75; app/api/account/profile/route.ts:14-39 (id read only from getCustomerContext())",
+      "arm-05": "app/api/account/route.ts:1-15 (GET only); grep for 'profile' PATCH/PUT across app+lib = 0 hits beyond a dashboard display component",
+      "arm-06": "app/api/account/profile/route.ts; lib/customers/session.ts:22-40"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-121",
+    "name": "Draft-order ownership + anti-enumeration gate",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "resolveDraftOwner() (lib/order-builder/draft-store.ts) derives ownership ONLY from the customer session cookie or an HMAC-hashed guest-draft cookie -- no API ever accepts a draft id from the client, so there is nothing for a second browser to enumerate. Guest draft token is stored only as its HMAC hash (DB dump can't be replayed as a cookie). Textbook anti-enumeration design, explicitly commented as R-121/R-023."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical draft-store logic; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "app/api/checkout/[draftId]/route.ts accepts a draftId in the URL rather than deriving it purely from a session/cookie -- this is a materially different (and slightly weaker) shape than the clone cluster's cookie-only design. Ownership is still checked server-side against the resolved customer/guest identity before any draft is returned or mutated (not a raw id-based lookup), so it isn't a bare IDOR, but the surface for enumeration (a guessable/sequential draftId in the URL) is larger than the cookie-only clone-cluster/arm-06 design."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "Customer/guest draft ownership is resolved server-side from session state similarly to the clone cluster (lib/customers/session.ts + guest cookie pattern); checkout/submit route re-derives the owner rather than trusting a client-supplied id."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "lib/order-builder/draft-store.ts:11-50 (owner resolved from cookies only, guest token stored as HMAC hash)",
+      "arm-05": "app/api/checkout/[draftId]/route.ts (draftId taken from the URL path)"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-122",
+    "name": "Guarded public JSON endpoints (same-origin + IP rate limit + Zod)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/public-guard.ts: isSameOrigin() checks Origin falling back to Referer (refuses when neither header is present), guardPublicEndpoint() layers a per-IP fixed-window rate limit (lib/rate-limit.ts, TRUST_PROXY-gated XFF handling to prevent spoofed rate-limit keys) on top; every public mutation route (checkout, newsletter, client-error) calls it, and each route layers its own Zod schema. Solid, no test file though."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/public-guard.ts diff vs arm-02 is BOM/newline only (functionally identical), BUT arm-04 uniquely adds tests/public-guard.test.ts -- 4 real unit tests covering no-header refusal, foreign-origin refusal, own-origin pass, and unparseable-Referer refusal. Genuine, evidenced improvement over the rest of the cluster on the 'tested' dimension for this exact item."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "hasSameOrigin() checked on every state-changing admin/public route (verified in staff, checkout/local); Zod schemas present throughout. Less clear evidence of a dedicated per-IP rate limiter on public storefront endpoints specifically (rate limiting was found on cron/client-error paths, less systematically on public POST routes)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/public-guard.ts is functionally identical to the clone cluster's (same isSameOrigin/rate-limit shape, same code comments even), applied consistently to checkout/newsletter/client-error routes."
+      }
+    },
+    "winner": "arm-04",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "lib/public-guard.ts:1-39; lib/rate-limit.ts:1-37 (TRUST_PROXY-gated clientIp)",
+      "arm-04": "tests/public-guard.test.ts:1-29 (4 unit tests against isSameOrigin, absent in arm-01/02/03)",
+      "arm-06": "lib/public-guard.ts (same shape/comments as clone cluster)"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-129",
+    "name": "Test-only destructive operations (reset/wipe/seed)",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "app/api/admin/test-console/route.ts is fail-closed (404 unless isTestMode(), which is itself false whenever a real STRIPE_SECRET_KEY is configured) AND requires settings.manage. wipeOpenSeason() (lib/test-console.ts) is carefully SEASON-SCOPED -- deletes only the currently open season's transactional rows (orders/packages/routes/payments/etc.) in FK-safe order inside one transaction, explicitly preserving catalog/customers/staff/audit/other-seasons. Every action is audited."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical test-console; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "app/api/admin/test-console/route.ts is gated by settings.manage + isTestConsoleEnabled() (TEST_MODE=true AND NODE_ENV in dev/test -- fail-closed). But wipeTestData() builds a dynamic TRUNCATE over EVERY table returned by a `pg_tables` query except a small hardcoded exclude-list (StaffUser/AppSetting/AuditEvent) -- this truncates Customers, catalog, all seasons, everything, via string-interpolated raw SQL (table names are quote-escaped and sourced from the system catalog, so not attacker-controlled, but the technique is far blunter/riskier-looking than the clone cluster's explicit, season-scoped per-table deletes)."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "app/api/admin/test-ops/route.ts double-gates on settings.manage PLUS requireTestEnv() (APP_ENV=test), explicitly commented 'neither alone is enough'. runTestOps() truncates an explicit, hardcoded WIPE_TABLES allowlist (safer than arm-05's exclude-everything-else approach) with FK CASCADE, and the allowlist is unit-pinned against the schema so drift is a test failure. Not season-scoped (wipes everything except staff/audit/sessions), a coarser design than the clone cluster's season-only wipe but a deliberate, safely-built one."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "app/api/admin/test-console/route.ts:1-34; lib/test-console.ts:1-60 (season-scoped, FK-safe transaction)",
+      "arm-05": "app/api/admin/test-console/route.ts:1-25 (dynamic pg_tables TRUNCATE minus a small exclude-list)",
+      "arm-06": "app/api/admin/test-ops/route.ts:15-39 (dual gate); lib/testops/actions.ts:1-40 (explicit WIPE_TABLES allowlist)"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-131",
+    "name": "Startup secret + environment validation",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/env.ts is a comprehensive Zod schema (SESSION_SECRET min 16, AUTH_MODE enum, Stripe/Shippo/Twilio conditionals via .superRefine -- e.g. refuses STRIPE_SECRET_KEY with the repo-default webhook secret, refuses NODE_ENV=production without a real gateway); instrumentation.ts's register() hook imports lib/env at server startup so misconfiguration throws before any request is served. Only nit (flagged in the arm's own AGGREGATE-REVIEW-P2/P3/P8): SESSION_SECRET's 16-char minimum is low and the shipped .env.example default is a known string, so an operator who doesn't rotate it weakens every HMAC in the app."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical env.ts; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 2,
+        "flags": [
+          "THEATER"
+        ],
+        "note": "lib/env.ts defines requireProductionEnvironment() (Zod-validates only DATABASE_URL + two Clerk keys) but grep across the entire app/lib/scripts tree shows it is NEVER CALLED anywhere -- pure dead code. The only env checks actually exercised at runtime are the narrower isClerkConfigured()/isDevAuthEnabled() predicates. No SESSION_SECRET, CRON_SECRET, or Stripe/webhook-secret validation exists at all. This is the weakest implementation of the batch."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "lib/env.ts builds its Zod schema from a declarative lib/env-spec.ts table and executes `export const env = loadEnv()` at module top-level -- since nearly every route transitively imports lib/env (via lib/db.ts etc.), this throws on first import/request rather than via an explicit instrumentation.ts hook. Functionally similar fail-fast behavior to the clone cluster, just without the same explicit startup-hook ceremony."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "lib/env.ts:1-95 (comprehensive schema + superRefine fail-closed rules); instrumentation.ts:1-4 (register() imports lib/env)",
+      "arm-05": "lib/env.ts:19-26 (requireProductionEnvironment defined); grep for call sites across app/lib/scripts = 0 (dead code)",
+      "arm-06": "lib/env.ts:1-24 (top-level loadEnv() throws on first import); lib/env-spec.ts"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-132",
+    "name": "Bounded, redacted client error ingestion",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "app/api/client-error/route.ts: per-IP rate limit (10/min via lib/rate-limit.ts), Zod caps message<=500/path<=200, strips control characters (incl. CR/LF) before logging to defend against log-forging/terminal-escape injection, no stack traces or user data accepted. app/error.tsx posts only `error.digest ?? message.slice(0,500)` + pathname -- never the full stack."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical route; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 5,
+        "flags": [],
+        "note": "app/api/client-error/route.ts requires a shared `x-error-reporting-token` header (rejects if unset/default/mismatched) instead of a per-IP rate limit -- an unusual design for a client-side error beacon since the token would need to ship in the client bundle to be usable, undermining its secrecy; no rate limiting was found on this route at all. Zod caps are present (message<=500, no CR/LF via refine, path<=300)."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "app/api/client-error/route.ts caps message/url/stackFirstLine lengths via Zod and applies a process-wide sliding-window rate limit (30/min) -- bounded and redacted, though the rate limit is global rather than per-IP (a single abusive client could exhaust the shared budget for everyone), a step down from the clone cluster's per-IP bucket."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "app/api/client-error/route.ts:1-27 (per-IP rate limit, control-char stripping, 500/200-char caps)",
+      "arm-05": "app/api/client-error/route.ts:1-18 (shared-token gate, no rate limit)",
+      "arm-06": "app/api/client-error/route.ts:1-33 (global 30/60s rate limit, Zod caps)"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-149",
+    "name": "Normalized order tree (Order -> OrderLine -> add-ons)",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Order -> OrderLine -> {OrderLineOption, OrderLineAddOn} as three distinct, clearly-named join/snapshot tables. Textbook-normalized, easy to reason about."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "Order -> OrderLine -> OrderLineAddOn, plus a PackageLine join between OrderLine and Package. Missing a distinct options-join (options travel as a Json optionSnapshot on OrderLine instead of a relational row), a small step down in normalization for options specifically."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "Order -> DraftRecipient -> OrderLine, with add-ons modeled as a SELF-REFERENTIAL OrderLine row (parentLineId) rather than a separate add-on table. Clever (one CHECK enforces exactly one of productId/addOnId + add-on lines must carry parentLineId) but a real design deviation from a textbook tree -- a single table now serves two different row shapes, which is harder to reason about than clone's explicit separate tables."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:350-394",
+      "arm-05": "prisma/schema.prisma:435-466",
+      "arm-06": "prisma/schema.prisma:440-505"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-155",
+    "name": "Shipping quotes with selectable expiring options",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "ShippingQuote (provider/quotedAt/expiresAt) -> ShippingQuoteOption[] (carrier/service/amountCents/estimatedDays) as a real normalized parent/children pair -- each option is a queryable, indexable row; customer selects one option from the set."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "ShippingQuote is itself ONE carrier/service/amountCents row with its own expiresAt -- there's no parent 'quote' grouping multiple carrier options together; 'selectable options' has to be reconstructed by querying several ShippingQuote rows for the same package, which is a weaker structural expression of the requirement."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "ShippingQuote.options is a Json blob (array of options) under one expiresAt -- correctly groups multiple options under one quote/expiry, but the options themselves aren't normalized rows (less queryable/indexable than clone's dedicated child table)."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:570-593",
+      "arm-05": "prisma/schema.prisma:678-690",
+      "arm-06": "prisma/schema.prisma:688-700"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-156",
+    "name": "Pickup locations",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "PickupLocation model (name/line1/city/state/zip/isActive) exists with full admin CRUD (app/api/admin/pickup-locations), but NO FK from Package to PickupLocation anywhere in the schema -- a pickup package's specific location assignment isn't modeled, only the location catalog is."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PickupLocation model PLUS Package.pickupLocationId (nullable FK, onDelete: SetNull) -- an individual package's pickup location assignment is actually modeled and wired, closing the gap the other five arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PickupLocation model with admin CRUD, same gap as clone cluster: no FK from Package to PickupLocation."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:641-649; app/api/admin/pickup-locations/",
+      "arm-05": "prisma/schema.prisma:468-501,692-704",
+      "arm-06": "prisma/schema.prisma:750-762"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-157",
+    "name": "Package types + shipment boxes",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "PackageType and ShipmentBox both exist as standalone dimension catalogs (name/widthCm/lengthCm/heightCm/weightGrams), but neither is actually referenced by the Shipment model (which only carries a free-form parcels Json bin-packing snapshot) -- the catalogs are disconnected from real shipment records."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical gap."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "PackageType (dims + maxWeightOunces) <- ShipmentBox.packageTypeId (Restrict) <- ShipmentBox.packageId (SetNull, an assigned box on a specific package) -- an actual wired chain from box-type catalog to a real package's box assignment, closing the gap the other arms leave open."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "PackageType and ShipmentBox both exist as standalone catalogs; Shipment carries only a parcels Json snapshot, same disconnection as clone cluster."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:651-669",
+      "arm-05": "prisma/schema.prisma:706-740",
+      "arm-06": "prisma/schema.prisma:767-792"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-159",
+    "name": "Stripe PaymentIntent modeling",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "StripePaymentIntent (stripeIntentId unique, status, amountCents) AND a separate StripeCheckoutSession (stripeSessionId unique, status, amountCents, paymentIntentId) -- models both the hosted-checkout session and the underlying intent as distinct, auditable rows."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "StripePaymentIntent (1:1 optional link to Payment via paymentId) plus a separate CheckoutSession model (providerSessionId/providerIntentId/status/amountCents). Comparable coverage to clone cluster, provider-agnostic naming."
+      },
+      "arm-06": {
+        "score": 6,
+        "flags": [],
+        "note": "StripePaymentIntent exists (intentId unique, raw Json webhook payload with an explicit PII-redaction comment) but there is NO separate checkout-session model -- Order.stripeSessionId is just a plain unique string field, less normalized/auditable than the other two arms' dedicated session tables."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:532-555",
+      "arm-05": "prisma/schema.prisma:641-666",
+      "arm-06": "prisma/schema.prisma:387-438,660-673"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-162",
+    "name": "Geocode cache with success/failure TTLs",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "GeocodeCache{addressHash unique, latitude, longitude, provider, fetchedAt, expiresAt}. lib/addresses/geocode.ts implements a real 30-day success cache with a live Mapbox provider + deterministic local fallback, but a FAILED lookup (coordinates null) is simply returned uncached -- there is no negative/failure-specific TTL, and the schema itself has no way to represent a cached failure (lat/lng are non-nullable). 'Success/failure TTLs' as stated is only half-built."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "GeocodeCache{normalizedAddress unique, latitude/longitude Decimal, provider, expiresAt}. lib/delivery.ts has the same shape: real Mapbox call + fixture fallback, 30-day success TTL, no distinct failure-TTL representation."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "GeocodeCache{addressKey unique, lat/lng, provider, fetchedAt, expiresAt}, 30-day TTL. lib/customers/geocode.ts's deriveGeoPoint is a pure hash-based deterministic function with NO live external geocoding API integration at all (explicitly documented as 'no live geocoding API is reachable from this host') -- it can never actually fail, so the failure-TTL half of this requirement is not just unimplemented but structurally moot; also the least realistic of the three geocoders."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma:687-695; lib/addresses/geocode.ts",
+      "arm-05": "prisma/schema.prisma:774-785; lib/delivery.ts:79-104",
+      "arm-06": "prisma/schema.prisma:813-823; lib/customers/geocode.ts"
+    },
+    "_batch": "batch-07-data-model.json"
+  },
+  {
+    "id": "R-168",
+    "name": "Stripe refund synchronization",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "handleChargeRefunded/handleRefund in webhook route: syncs embedded refunds list when Stripe includes it, else books the cumulative delta under a deterministic key so replays stay idempotent."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01 (untouched file)."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "markRefunded() in webhook route flips Payment.status to REFUNDED keyed on stripePaymentIntent; idempotent via unique webhookEvent row, but no cumulative-delta or embedded-refunds-list handling \u2014 a partial refund followed by a second partial refund isn't distinctly reconciled."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/checkout/webhook.ts syncChargeRefunded(): finds POSTED payment by externalRef, voidPaymentTx + audit row in one transaction. Simpler (full-void only, no partial-amount delta tracking) than the clone cluster's embedded-list/delta logic but correct for its own model."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "app/api/webhooks/stripe/route.ts:222-278",
+      "arm-05": "app/api/stripe/webhook/route.ts:13-34",
+      "arm-06": "lib/checkout/webhook.ts:154-177"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "UR-004",
+    "name": "Map reroute",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "components/admin/route-map.tsx renders an inline server-side SVG plotting stop/delivered/suggestion points with a dashed polyline; route detail page overlays rerouteSuggestions() (packages within 0.5mi or same street of a stop, unshipped, no route yet) with a manager RerouteConfirmButton. confirmReroute() voids any purchased Shippo label via switchPackageMethod, inserts the new RouteStop nearest-neighbor-ordered, and reprints are triggered downstream. Real, working, geographically-plotted map -- but it is an SVG placeholder ('swap for Mapbox GL when a token exists' per its own comment), not an actual Mapbox map."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/03/04. Same evidence."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/02/04. Same evidence."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "route-map.tsx and the reroute service in lib/routes/service.ts are untouched by any of arm-04's 6 divergent files. Same evidence as arm-01."
+      },
+      "arm-05": {
+        "score": 3,
+        "flags": [
+          "MISSING",
+          "STUB"
+        ],
+        "note": "Backend exists in lib/delivery.ts (nearbyShippingPackages() computes candidates by geocoded distance, confirmReroute() calls switchPackageMethod + creates a stop) but there is ZERO UI surfacing it -- app/admin/delivery/page.tsx only offers manual comma-separated package-ID entry for route creation and has no map, no suggestion list, no reroute button anywhere. The resolved requirement ('map shows... manager confirms') is not reachable by a manager in this build."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "lib/routes/optimize.ts genuinely calls the real Mapbox Optimization API (optimized-trips/v1) for stop ordering with a nearest-neighbor fallback -- more real Mapbox integration than the clone cluster. lib/routes/reroute.ts + route-actions.tsx implement the full manager-confirmed reroute flow (0.5mi/same-street suggestions, label void, charge preserved) as a text list with a 'Scan for candidates' button and per-row Reroute action. However there is NO visual map anywhere on the route detail page -- no SVG, no static image, no GL widget -- so 'map shows delivery stops + nearby unshipped shipping' is satisfied functionally (the data) but not visually."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-01": "components/admin/route-map.tsx, app/(admin)/admin/routes/[id]/page.tsx, lib/routes/service.ts rerouteSuggestions()/confirmReroute()",
+      "arm-05": "lib/delivery.ts nearbyShippingPackages()/confirmReroute() -- unused by any page",
+      "arm-06": "lib/routes/optimize.ts orderStopsMapbox(), app/(admin)/admin/routes/[routeId]/route-actions.tsx (list UI, no map)"
+    },
+    "_batch": "batch-09-ur-requirements.json"
+  },
+  {
+    "id": "UR-015",
+    "name": "Driver UX",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "app/d/[token]/page.tsx is the magic-link driver route (resolveDriverAccess in lib/routes/driver-access.ts: token lookup + optional PIN-cookie gate, no full login). components/admin/route-map.tsx doubles as the manager's office-side map of the route. googleMapsUrl() in lib/routes/geo.ts gives per-stop turn-by-turn deep links. '/api/admin/routes/[id]/print?kind=sheet' is the printed fallback for a driver without a phone."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/03. arm-04's driver-access.ts (a divergent file) differs only by a trailing blank line. Same evidence."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/02. Same evidence."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "lib/routes/driver-access.ts (one of arm-04's 6 divergent files) diffs against arm-02's version by only a trailing blank line -- the magic-link resolution logic (token + optional PIN gate, no full login) is functionally identical. Same evidence as arm-01."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "app/driver/[token]/page.tsx: token+optional-PIN access (no login), per-stop 'Open Google Maps' deep link, start-route/mark-delivered actions, plus rate-limited PIN attempts (PIN_ATTEMPT_LIMIT/PIN_THROTTLE_MS -- a security nuance the other builds don't show as explicitly). Printed route fallback exists via the admin '/api/admin/delivery/[id]' print link. No office Mapbox map."
+      },
+      "arm-06": {
+        "score": 7,
+        "flags": [],
+        "note": "app/(driver)/drive/[token]/drive-app.tsx: token+PIN magic link (no login), Google Maps deep link per stop (googleMapsDirectionsUrl, no API key required), one-tap 'Start route' fires day-of notifications exactly once, printed manifest/cards fallback via '/api/admin/routes/[id]/print.pdf'. Real Mapbox Optimization API used for route ORDERING (lib/routes/optimize.ts) but no visual Mapbox 'office map' anywhere in the admin route pages."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "app/d/[token]/page.tsx, lib/routes/driver-access.ts, components/admin/route-map.tsx, lib/routes/geo.ts googleMapsUrl()",
+      "arm-05": "app/driver/[token]/page.tsx (PIN throttling)",
+      "arm-06": "app/(driver)/drive/[token]/drive-app.tsx, lib/routes/geo.ts googleMapsDirectionsUrl()"
+    },
+    "_batch": "batch-09-ur-requirements.json"
+  },
+  {
+    "id": "G-008",
+    "name": "Finished-package inventory (v1 primary)",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "InventoryItem model: quantityOnHand/reserved/version, one row per Product or AddOn (unique FK). lib/domain/inventory.ts reserveInventory()/releaseReservation() use raw conditional SQL UPDATEs (WHERE quantityOnHand-reserved>=qty) as the atomic concurrency guard -- two checkouts racing for the last unit can never both succeed. This is the primary/only inventory model wired into checkout and pickup-readiness; BOM/ingredient stock (G-009/G-010) is explicitly out of scope for v1."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/03. Same evidence."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/02. Same evidence."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "lib/domain/inventory.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."
+      },
+      "arm-05": {
+        "score": 9,
+        "flags": [],
+        "note": "InventoryItem: quantityOnHand/quantityReserved/version PLUS a separate InventoryReservation join model (one row per reservation rather than just a counter) -- arguably a cleaner audit trail than the clone cluster's counter-only approach, since a reservation can be traced back to its origin. Reservation logic still uses guarded conditional updates."
+      },
+      "arm-06": {
+        "score": 8,
+        "flags": [],
+        "note": "InventoryItem.onHand used as the finished-stock gate for pickup readiness (hasAvailableInventory() in lib/pickup/readiness.ts checks onHand>=0). Slightly thinner concurrency story than the clone cluster/arm-05 -- no separate reserved counter visible in the schema dump, onHand alone gates readiness rather than an onHand/reserved pair."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-01": "prisma/schema.prisma InventoryItem, lib/domain/inventory.ts",
+      "arm-05": "prisma/schema.prisma InventoryItem + InventoryReservation",
+      "arm-06": "prisma/schema.prisma InventoryItem.onHand, lib/pickup/readiness.ts hasAvailableInventory()"
+    },
+    "_batch": "batch-10-g-checklist.json"
+  }
+]

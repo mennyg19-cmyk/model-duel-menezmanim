@@ -1,0 +1,538 @@
+[
+  {
+    "id": "R-192",
+    "name": "Marketing imagery assets",
+    "scores": {
+      "arm-01": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "public/ contains only the unmodified create-next-app default SVGs (globe.svg, next.svg, window.svg, vercel.svg, file.svg) \u2014 no Purim/Tomchei-Shabbos-specific marketing imagery, hero graphics, or brand assets were ever added."
+      },
+      "arm-02": {
+        "score": 1,
+        "flags": [
+          "MISSING",
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical public/ directory \u2014 same unmodified scaffold SVGs."
+      },
+      "arm-03": {
+        "score": 1,
+        "flags": [
+          "MISSING",
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01/02."
+      },
+      "arm-04": {
+        "score": 1,
+        "flags": [
+          "MISSING",
+          "CLONE-TIE"
+        ],
+        "note": "arm-04's diffs don't touch public/."
+      },
+      "arm-05": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No public/ directory exists at all in this workspace \u2014 zero static assets of any kind, marketing or otherwise."
+      },
+      "arm-06": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No public/ directory exists at all in this workspace either \u2014 zero static assets, not even the default Next.js scaffold images."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-02",
+    "evidence": {
+      "arm-01": "public/: globe.svg, next.svg, window.svg, vercel.svg, file.svg (all unmodified create-next-app defaults)",
+      "arm-05": "no public/ directory found",
+      "arm-06": "no public/ directory found"
+    },
+    "_batch": "batch-05-reporting-config-design.json"
+  },
+  {
+    "id": "R-107",
+    "name": "Clerk identity integration + middleware",
+    "scores": {
+      "arm-01": {
+        "score": 6,
+        "flags": [],
+        "note": "middleware.ts switches between clerkMiddleware() (AUTH_MODE=clerk) and a dev cookie-presence gate; StaffUser/Customer.clerkUserId columns exist for identity linking. But no ClerkProvider anywhere in app/layout.tsx and no Clerk UI mounted -- Clerk mode is a documented, unexercised swap-point (DECISION-P4-2: 'no keys in harness'), not a working integration. Dev-mode middleware itself is solid."
+      },
+      "arm-02": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 6,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "middleware.ts identical to arm-02 (verified via diff -- only BOM/newline noise elsewhere in this batch's touched files, no functional change here)."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "Real Clerk usage: ClerkProvider in app/layout.tsx, auth()/currentUser() in lib/route-auth.ts, isClerkConfigured() gate. But there is NO middleware.ts anywhere in the tree -- zero edge-level route protection for /admin or /driver; only a dev-header-based readDevSession() bypass gates anything early. Half of R-107 (real Clerk calls) is more genuine than the clone cluster's, but the 'middleware' half is simply absent."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "MISSING",
+          "THEATER"
+        ],
+        "note": "No @clerk/nextjs dependency anywhere in package.json; zero Clerk usage in the whole tree. middleware.ts is real and functional but implements a first-party session check only. Code comments in lib/customers/session.ts explicitly say 'Clerk swap: replace this module's decode half with Clerk session claims' -- an aspirational comment describing work that was never done, not a real integration."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-02": "middleware.ts:1-19; lib/env.ts:25-30 (AUTH_MODE clerk/dev); app/layout.tsx has no ClerkProvider",
+      "arm-05": "app/layout.tsx:1-18 (real ClerkProvider); lib/route-auth.ts:1-40 (real auth()/currentUser()); no middleware.ts file exists in the tree",
+      "arm-06": "middleware.ts:1-24 (first-party session only); lib/customers/session.ts:11 comment ('Clerk swap...') with zero @clerk/nextjs import in package.json"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-108",
+    "name": "Sign-in / sign-up pages",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "Real, working pages: app/login/page.tsx (staff sign-in, open-redirect-safe ?next= handling) and app/(storefront)/signin/page.tsx (customer sign-in + register via components/account/auth-forms.tsx, anti-enumeration register endpoint at app/api/account/register). Fully functional in the app's real (dev-mode) auth path; no Clerk-hosted page exists but none is needed since Clerk isn't the live path."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical login/signin pages; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 1,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No /login, /signin, /sign-in, or /sign-up route exists anywhere in app/ (grep confirmed empty). The Clerk backend (auth()/currentUser()) is real but nothing in the app renders a page to actually sign in -- staff/customers have no way to reach an authenticated state outside the dev-auth header bypass."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "MISSING",
+          "BROKEN"
+        ],
+        "note": "app/dev-login only works when APP_ENV=test (fail-closed off in prod/preview); app/invite/[token] is a one-time-use staff confirmation link, not a reusable sign-in. No customer sign-in page or route exists (lib/customers/session.ts is defined but grep shows zero call sites for encodeCustomerSession/createCustomerSession anywhere in app/). Once a staff session's 12h TTL expires there is no way to sign back in in production -- setup/invite are the only session-issuing paths and both are single-use."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {
+      "arm-02": "app/login/page.tsx:1-60; app/(storefront)/signin/page.tsx uses components/account/auth-forms.tsx",
+      "arm-05": "grep -rn sign-in/sign-up/login across app/ returns nothing",
+      "arm-06": "app/dev-login/dev-customer-login-form.tsx:10-11 comment ('Real customer auth is Clerk's slot'); grep for encodeCustomerSession call sites in app/ = 0 results"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-133",
+    "name": "Automated repository security guardrails (CI)",
+    "scores": {
+      "arm-01": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory, no CI workflow file of any kind, anywhere in the tree (confirmed by a repo-wide find for *.yml/*.yaml). Nothing to grade."
+      },
+      "arm-02": {
+        "score": 0,
+        "flags": [
+          "MISSING",
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical (absent) to arm-01."
+      },
+      "arm-03": {
+        "score": 0,
+        "flags": [
+          "MISSING",
+          "CLONE-TIE"
+        ],
+        "note": "Byte-identical (absent) to arm-01."
+      },
+      "arm-04": {
+        "score": 0,
+        "flags": [
+          "MISSING",
+          "CLONE-TIE"
+        ],
+        "note": "Also absent; no functional diff in this batch's touched files."
+      },
+      "arm-05": {
+        "score": 4,
+        "flags": [],
+        "note": "The only arm with any CI at all: .github/workflows/ci.yml runs lint, typecheck, a migration-guard/harness step, and the test suite on push/PR. It is generic CI (not security-specific -- no secret scanning, SAST, or dependency audit step), but it is real, present, and would catch a meaningful class of regressions the other five arms have zero automated protection against."
+      },
+      "arm-06": {
+        "score": 0,
+        "flags": [
+          "MISSING"
+        ],
+        "note": "No .github directory or any CI workflow file anywhere in the tree, despite the package.json 'ci' script (lint+typecheck+migration-guard+tests) being clearly designed to be wired into one. The script exists; nothing actually invokes it automatically."
+      }
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {
+      "arm-02": "repo-wide find for *.yml/*.yaml under workspace = no results",
+      "arm-05": ".github/workflows/ci.yml:1-22",
+      "arm-06": "package.json 'ci' script exists (line ~20) but no .github/workflows directory anywhere"
+    },
+    "_batch": "batch-06-auth-security.json"
+  },
+  {
+    "id": "R-173",
+    "name": "Shippo SDK wrapper (rate/buy/void/track/validate)",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/shippo.ts: all 5 verbs (getRates/buyLabel/voidLabel/trackShipment/validateAddress) behind fetch, mock-mode fixtures, 15s AbortSignal timeout on every call, ShippoError class."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "shippo.ts identical to arm-01/02/03; the only arm-04-specific file in this area (lib/shipping/margin.ts) differs from arm-02's only by one trailing blank line \u2014 functionally identical, see R-174 note."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "lib/shippo.ts: ShippoClient interface (fixture/live) covers all 5 verbs with zod-free but well-typed response parsing; fixture mode is deterministic per postal code."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "lib/shipping/shippo.ts itself is excellent standalone (zod-validated response schemas, clientMessage/server-log detail split, all 5 verbs) \u2014 but see R-174: its sibling lib/shipping/margin.ts is corrupted (byte-identical to the OTHER arms' single-arg CarrierRate-based margin.ts, git-diff confirms 0 lines differ from arm-01's), so lib/shipping/quotes.ts (which imports 5 names from margin.ts that do not exist there: GROUND_SERVICE_TOKENS, MarginResolution, normalizeRates, RateOption, and a resolveMargin with a mismatched signature) fails to typecheck. quotes.ts is imported by lib/checkout/shipping-quotes.ts and lib/shipping/labels.ts, which is imported by 8 more files including every label route and the checkout flow \u2014 this is a full `next build`-breaking defect, not a standalone-file quality issue. The wrapper itself would score 9 in isolation; scored down because nothing in the delivered tree can actually invoke it."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "lib/shipping/shippo.ts:1-174",
+      "arm-05": "lib/shippo.ts:1-245",
+      "arm-06": "lib/shipping/shippo.ts (fine) + lib/shipping/margin.ts (broken, identical to arm-01's) + lib/shipping/quotes.ts:1-18 (imports non-existent exports)"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-174",
+    "name": "Shippo rate lookup + cheapest-rate selection",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "lib/shipping/quotes.ts + lib/shipping/margin.ts: bin-packs items into parcels, calls getRates, resolveMargin() picks the cheapest-per-carrier best and charges the highest \u2014 pure, unit-testable, persisted as an expiring ShippingQuote."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE-DIFFERS-TRIVIALLY"
+        ],
+        "note": "Diffed independently per instructions: `diff arm-02/lib/shipping/margin.ts arm-04/lib/shipping/margin.ts` shows only a trailing blank-line addition \u2014 logic is byte-for-byte identical (same resolveMargin, same bestByCarrier/perCarrierBest algorithm). Scored equal to the clone cluster."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "selectMarginRate() in lib/shippo.ts: filters to ground-equivalent, non-expired, eligible-carrier rates, then picks highest-charge/cheapest-buy \u2014 same margin law as the clone cluster, slightly less rigorously separated (rate-expiry filter lives inside the selector rather than at the quote boundary) but fully functional and used end-to-end in lib/shipping.ts."
+      },
+      "arm-06": {
+        "score": 1,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "This IS the corrupted subsystem: lib/shipping/margin.ts (checked via `git show` \u2014 introduced already-broken, byte-identical to arm-01's simpler single-arg CarrierRate version) does not export GROUND_SERVICE_TOKENS, MarginResolution, normalizeRates, or RateOption, and its resolveMargin(rates: CarrierRate[]) signature doesn't match the 3-arg call resolveMargin(options, config.includeUsps, groundTokens) in lib/shipping/quotes.ts. CarrierRate itself doesn't exist anywhere in arm-06's tree (its shippo.ts exports ShippoRate). scripts/test-p8.mts's own test calls (resolveMargin(rates, false)) also don't match the file's actual export \u2014 confirming the checked-in test suite was written against a different, correct margin.ts that is missing/overwritten. This is a real, verified TypeScript compile failure, not a style nit."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "lib/shipping/quotes.ts:1-71, lib/shipping/margin.ts:1-33",
+      "arm-05": "lib/shippo.ts:98-109",
+      "arm-06": "lib/shipping/margin.ts:1-32 vs lib/shipping/quotes.ts:1-18 (export mismatch); git show 5fa93da -- lib/shipping/margin.ts confirms it was already broken at commit time"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-175",
+    "name": "Shippo label failure compensation",
+    "scores": {
+      "arm-01": {
+        "score": 9,
+        "flags": [],
+        "note": "buyLabelForPackage(): advisory xact lock prevents double-buy, void-and-record on post-purchase DB write failure, recordFailedShipment() leaves a visible FAILED Shipment row without touching customer money."
+      },
+      "arm-02": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 9,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01 (labels.ts untouched by arm-04's diffs)."
+      },
+      "arm-05": {
+        "score": 8,
+        "flags": [],
+        "note": "createPackageLabel() in lib/shipping.ts: try/catch void-on-persist-failure, and a second-level catch that records a VOID_FAILED ShipmentBox + audit row when even the compensating void throws \u2014 thorough double-failure handling."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "lib/shipping/labels.ts buyLabel()/resolveStuckShipment() logic is arguably the best-designed of all six arms (distinguishes carrier-sold-but-not-persisted from never-sold, a stuck-purchase sweep, crash-window compensation) \u2014 but the file imports quoteShipping from lib/shipping/quotes.ts, which fails to typecheck (see R-174). As delivered, this module cannot compile, so the feature is unreachable in a real build despite excellent logic on paper."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "lib/shipping/labels.ts:91-227",
+      "arm-05": "lib/shipping.ts:192-307",
+      "arm-06": "lib/shipping/labels.ts:169-316 (depends on broken lib/shipping/quotes.ts)"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-176",
+    "name": "Shippo tracking refresh",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "refreshShipmentTracking(): fetches carrier status, maps failure to a clean ActionError instead of a 500."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01 (untouched file)."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "refreshPackageTracking() in lib/shipping.ts: refreshes carrier tracking, persists trackingStatus/lastTrackedAt, logs a PackageAudit row."
+      },
+      "arm-06": {
+        "score": 2,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "refreshTracking() in lib/shipping/labels.ts is well-designed (an explicit allowTerminal flag so tracking keeps working once the carrier has the package, unlike buy/void) but the module transitively fails to typecheck via lib/shipping/quotes.ts (see R-174), so it cannot ship in a real build."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "lib/shipping/labels.ts:296-320",
+      "arm-05": "lib/shipping.ts:321-334",
+      "arm-06": "lib/shipping/labels.ts:596-622"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-177",
+    "name": "Shippo address validation",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "validateAddress() in shippo.ts, called from buyLabelForPackage before any label purchase \u2014 carrier refusal surfaces as a clean error, no money moves."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01 (untouched file)."
+      },
+      "arm-05": {
+        "score": 7,
+        "flags": [],
+        "note": "validateAddress() in lib/shippo.ts (fixture/live), invoked from validatePackageAddress() and inside createPackageLabel() before buying."
+      },
+      "arm-06": {
+        "score": 3,
+        "flags": [
+          "BROKEN"
+        ],
+        "note": "shippo.ts's validateAddress() itself is fine standalone (doesn't import the broken margin.ts) and is used correctly in labels.ts's buyLabel()/validatePackageAddress() \u2014 but labels.ts as a whole fails to typecheck because it also imports the broken lib/shipping/quotes.ts (see R-174/R-175), so the staff-facing 'validate this address' feature is unreachable in the delivered build despite the underlying function being correct."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "lib/shipping/shippo.ts:157-173, lib/shipping/labels.ts:109-112",
+      "arm-05": "lib/shippo.ts:170-174, lib/shipping.ts:187-190",
+      "arm-06": "lib/shipping/shippo.ts:284-295, lib/shipping/labels.ts:624-633 (module fails to compile)"
+    },
+    "_batch": "batch-08-integrations.json"
+  },
+  {
+    "id": "R-179",
+    "name": "Mapbox geocoding with cache",
+    "scores": {
+      "arm-01": {
+        "score": 8,
+        "flags": [],
+        "note": "geocodeAddress() in lib/addresses/geocode.ts: GeocodeCache TTL (30 days), real Mapbox geocoding call when MAPBOX_ACCESS_TOKEN is set, deterministic ZIP-centroid+street-offset fallback otherwise \u2014 always returns coordinates."
+      },
+      "arm-02": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-03": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01."
+      },
+      "arm-04": {
+        "score": 8,
+        "flags": [
+          "CLONE-TIE"
+        ],
+        "note": "Identical to arm-01 (untouched file)."
+      },
+      "arm-05": {
+        "score": 6,
+        "flags": [],
+        "note": "geocodeAddress() in lib/delivery.ts: real Mapbox Search v6 forward call, cached via GeocodeCache. Without a token, mapboxCoordinates() THROWS (\"MAPBOX_ACCESS_TOKEN must be configured\") rather than degrading \u2014 only test mode gets a fixture; a token-less non-test deployment cannot geocode at all, unlike the clone cluster's always-available fallback."
+      },
+      "arm-06": {
+        "score": 5,
+        "flags": [],
+        "note": "lib/customers/geocode.ts derives lat/lng deterministically from a hash of the address key and caches it with a TTL \u2014 there is no live Mapbox Geocoding API call anywhere in the tree. The real Mapbox integration that exists (lib/routes/optimize.ts) calls the Optimization API for admin route stop-ordering, not geocoding, with a documented nearest-neighbor fallback. Matches the resolved 'Mapbox for admin' spirit for route building, but literally does not implement 'Mapbox geocoding' \u2014 geocoding itself is fixture-only."
+      }
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-05",
+    "evidence": {
+      "arm-01": "lib/addresses/geocode.ts:44-99",
+      "arm-05": "lib/delivery.ts:58-111",
+      "arm-06": "lib/customers/geocode.ts:1-41, lib/routes/optimize.ts:54-85 (Mapbox used for optimization, not geocoding)"
+    },
+    "_batch": "batch-08-integrations.json"
+  }
+]

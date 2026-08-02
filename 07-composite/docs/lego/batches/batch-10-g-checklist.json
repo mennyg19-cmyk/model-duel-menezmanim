@@ -1,0 +1,452 @@
+[
+  {
+    "id": "G-001",
+    "name": "Hybrid fulfillment (print-first + optional digital stages)",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "Package.stage enum NEW->PRINTED->PACKED->SENT/PICKED_UP (lib/domain/package-stage.ts) is the print-first spine; digital stages (email/SMS notifications for bulk-scheduled, pickup-ready, day-of delivery) are separate opt-in sends layered on top via lib/notifications, never required to advance a stage. Print batches (lib/print/batches.ts) only create artifact rows -- printing and the digital notify layer are fully decoupled optional add-ons over the same paper-first spine."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03 (confirmed diff -q). Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02 (confirmed diff -q). Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "None of the 6 divergent files touch package-stage.ts or print/batches.ts; verified those files are functionally identical to arm-02 (diff shows only trailing-newline/BOM noise). Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "PackageStatus enum NEW->PRINTED->PACKED->SENT->PICKED_UP->UNCLAIMED (extra terminal state vs the clone cluster) in lib/package-operations.ts; print-batches.ts never touches package status; captureNotification() in lib/delivery.ts sends bulk-scheduled/day-of/pickup-ready emails/SMS as a separate optional layer. Same shape, less cross-referenced documentation of the print!=digital independence."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/packages/stages.ts drives PackageStage per-method (terminalStageFor by FulfillmentChoice), lib/packages/print-batches.ts creates PrintBatchItem rows only, and lib/notify/outbox.ts is a fully separate outbox-pattern digital layer (queued, retried, deduped) completely decoupled from stage/print. Cleanest separation of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/domain/package-stage.ts, lib/print/batches.ts", "arm-05": "lib/package-operations.ts, lib/print-batches.ts, lib/delivery.ts captureNotification", "arm-06": "lib/packages/stages.ts, lib/packages/print-batches.ts, lib/notify/outbox.ts"}
+  },
+  {
+    "id": "G-002",
+    "name": "Print slips/labels/cards without marking shipped",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/print/batches.ts explicit comment: 'Batches only CREATE artifact rows; they never write to Package (G-002).' runNightlyBatch/reprintFilingGroup/reprintOrder all only db.printBatch.create + db.printArtifact rows -- zero package.update calls anywhere in the file. Stage advance is a fully separate staff action (lib/packages/actions.ts advancePackageStage)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/print/batches.ts untouched by arm-04's divergent-file set; confirmed identical to arm-02. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/print-batches.ts createNightlyPrintBatch/reprintArtifact/reprintOrderPackingSlip/printArtifactDocument -- grepped for status-writes, none found; only reads packages with status filter and creates PrintArtifact/PrintBatch rows. Stage change is the separate advancePackageStatus() in package-operations.ts. Same guarantee, no explicit design comment calling it out."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/packages/print-batches.ts runNightlyPrintBatch/reprintFilingGroup: only tx.printBatch.create + tx.printBatchItem.createMany, no Package writes. Advisory lock added so a concurrent nightly run can't file a stale package set -- slightly more concurrency-hardened than the clone cluster's version."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/print/batches.ts (runNightlyBatch, reprintFilingGroup, reprintOrder)", "arm-05": "lib/print-batches.ts", "arm-06": "lib/packages/print-batches.ts"}
+  },
+  {
+    "id": "G-003",
+    "name": "Default package grouping + staff split",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/domain/grouping.ts packageGroupingKey() hashes recipient/address/method/greeting to auto-combine order lines into one default package. lib/packages/actions.ts splitPackage() moves whole lines or partial quantities (blocks partial split of lines carrying add-ons) into a new suffixed-key package inside one transaction with full PackageAudit trail both sides; regroupPackages() re-merges NEW-stage packages that share the grouping key."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/packages/actions.ts and lib/domain/grouping.ts are outside arm-04's divergent-file set; confirmed identical to arm-02. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/package-operations.ts groupPackageCandidates() groups by (recipientKey, addressId, methodId, greeting) JSON key at order finalize; splitPackage/regroupPackages are version-guarded transactions with PackageAudit. Functionally equivalent to the clone cluster, marginally less elaborate add-on-split guard."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/packages/grouping.ts computes the same 4-field grouping key; lib/packages/moves.ts splitPackage/mergePackages move OrderLine rows between boxes with optimistic-version bump + PackageEvent audit. Independently converged on essentially the same design as the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/domain/grouping.ts, lib/packages/actions.ts (splitPackage/regroupPackages)", "arm-05": "lib/package-operations.ts (groupPackageCandidates/splitPackage/regroupPackages)", "arm-06": "lib/packages/grouping.ts, lib/packages/moves.ts"}
+  },
+  {
+    "id": "G-004",
+    "name": "Package-level status and printing",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "advancePackageStage() in lib/packages/actions.ts: version-guarded conditional updateMany (optimistic lock -- concurrent advances race on version, loser gets 409), canAdvancePackage() enforces forward-only + channel-correct terminal stage, PackageAudit row on every transition. Package board (lib/packages/board.ts) supports per-stage/per-method filtering + pagination + channel summary rollups (stageCounts per method)."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/packages/actions.ts and board.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "advancePackageStatus()/updatePackageStatuses() in lib/package-operations.ts: version-guarded updateMany with an explicit allowedTransitions map (forward-only per status), plus a bulk-update helper that reports per-package outcome (updated/error). Package dashboard paginated at 100/page. Solid parity with the clone cluster."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/packages/stages.ts: stage transitions are validated against the package's FulfillmentMethod.terminalStage (data-driven, not hardcoded), version-guarded update, PackageEvent audit row. Slightly more flexible design (terminal stage configurable per method row) than the clone cluster's fixed enum-based terminal lookup."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/packages/actions.ts advancePackageStage(), lib/packages/board.ts", "arm-05": "lib/package-operations.ts advancePackageStatus()/updatePackageStatuses()", "arm-06": "lib/packages/stages.ts"}
+  },
+  {
+    "id": "G-005",
+    "name": "Staff method switch; preserve paid charge",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/routes/service.ts switchPackageMethod(): only allows shipping<->delivery kind pairs, refuses once SENT/PICKED_UP or while sitting on an undelivered route stop, voids any PURCHASED Shippo label INSIDE the same transaction as the flip (bounded by SHIPPO_TIMEOUT_MS), writes PackageAudit with from/to. UI (package-board.tsx) explicit copy: 'Charge stays what the customer paid (UR-002)'. Money amount on the Order/Package is never touched by the switch."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/routes/driver-access.ts is one of arm-04's 6 'divergent' files, but switchPackageMethod itself lives in lib/routes/service.ts which arm-04 never touched (confirmed identical to arm-02). driver-access.ts diff vs arm-02 is a trailing-newline no-op. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "lib/delivery.ts switchPackageMethod(): refuses once SENT, voids purchased label via voidPackageLabel() before flipping fulfillmentMethodId, logs preservedCustomerChargeCents + voidedLabelId in PackageAudit.details. Correct and charge-safe, but no active-route-stop guard and the preserved-charge value is logged, not read back for any reconciliation check."},
+      "arm-06": {"score": 9, "flags": [], "note": "app/(admin)/admin/packages/[packageId]/method-switch.tsx + API /switch route: two-step confirm flow (first call surfaces 'confirmVoid' requirement, explicit second confirm needed to void an active label), UI copy explicitly states 'charge is preserved', response echoes preservedFeeCents back to the staff screen. Best UX polish of the three on this exact requirement."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/routes/service.ts switchPackageMethod(), app/api/admin/packages/[id]/method/route.ts", "arm-05": "lib/delivery.ts switchPackageMethod()", "arm-06": "app/(admin)/admin/packages/[packageId]/method-switch.tsx, app/api/admin/packages/[id]/switch"}
+  },
+  {
+    "id": "G-006",
+    "name": "Shipping rate-shop + margin + Shippo labels",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/shipping/margin.ts resolveMargin(): quotes every eligible carrier, takes each carrier's cheapest quote (rate-shop), charges the customer the HIGHEST per-carrier-best, buys the label on the CHEAPEST -- pure function, explicitly unit-testable. lib/shipping/shippo.ts wraps the actual Shippo rate/label/void/track API calls behind a provider seam with mock fallback."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Baseline for arm-04 comparison per the assignment's ground truth. margin.ts is byte-identical to arm-01/03 (mod trailing newline)."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/shipping/margin.ts is one of the 5 files the ground truth calls out as divergent between arm-02 and arm-04; a full diff shows the ONLY difference is a trailing blank line -- the margin/rate-shop logic is byte-for-byte identical. Scored as a true CLONE-TIE, not an independent re-grade, because there is no behavioral difference to grade."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/shippo.ts selectMarginRate(): filters to eligible ground-equivalent, non-expired carrier rates, charge=highest amountCents, purchase=lowest amountCents, spreadCents recorded; used consistently in quoteCheckoutShipping/createPackageLabel and persisted on ShipmentBox for margin reporting. Correct and complete, marginally less defensive (no explicit per-carrier-best dedup step) than the clone cluster's Map-based approach."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/shipping/margin.ts resolveMargin(): identical charge-highest/buy-cheapest logic, independently converged on essentially the same pure-function design and doc comments as the clone cluster. lib/shipping/shippo.ts has the full rate/label/void/refresh-tracking client."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/shipping/margin.ts resolveMargin(), lib/shipping/shippo.ts", "arm-04": "lib/shipping/margin.ts (diff vs arm-02: trailing newline only)", "arm-05": "lib/shippo.ts selectMarginRate()", "arm-06": "lib/shipping/margin.ts resolveMargin()"}
+  },
+  {
+    "id": "G-007",
+    "name": "Stripe hosted checkout, immediate capture",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/payments/stripe.ts creates a Checkout Session (mode: payment) via raw stripeRequest wrapper; comment: 'Immediate capture (R-166, UR-013 capture half): the default capture_method for Checkout is automatic -- funds are captured at pay.' Webhook (app/api/webhooks/stripe) finalizes the order on checkout.session.completed."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/payments/stripe.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/checkout.ts explicitly sets 'payment_intent_data[capture_method]': 'automatic' on the Checkout Session create call -- more explicit than relying on the API default, functionally identical (immediate capture)."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/payments/stripe.ts creates a Checkout Session with client_reference_id/metadata wiring for the draftRef->order reconciliation; capture is Checkout's automatic default (not overridden, same as clone cluster). Solid webhook-driven finalize path."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/payments/stripe.ts (checkout session create, comment on capture_method)", "arm-05": "lib/checkout.ts (payment_intent_data[capture_method]=automatic)", "arm-06": "lib/payments/stripe.ts"}
+  },
+  {
+    "id": "G-008",
+    "name": "Finished-package inventory (v1 primary)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "InventoryItem model: quantityOnHand/reserved/version, one row per Product or AddOn (unique FK). lib/domain/inventory.ts reserveInventory()/releaseReservation() use raw conditional SQL UPDATEs (WHERE quantityOnHand-reserved>=qty) as the atomic concurrency guard -- two checkouts racing for the last unit can never both succeed. This is the primary/only inventory model wired into checkout and pickup-readiness; BOM/ingredient stock (G-009/G-010) is explicitly out of scope for v1."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/domain/inventory.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 9, "flags": [], "note": "InventoryItem: quantityOnHand/quantityReserved/version PLUS a separate InventoryReservation join model (one row per reservation rather than just a counter) -- arguably a cleaner audit trail than the clone cluster's counter-only approach, since a reservation can be traced back to its origin. Reservation logic still uses guarded conditional updates."},
+      "arm-06": {"score": 8, "flags": [], "note": "InventoryItem.onHand used as the finished-stock gate for pickup readiness (hasAvailableInventory() in lib/pickup/readiness.ts checks onHand>=0). Slightly thinner concurrency story than the clone cluster/arm-05 -- no separate reserved counter visible in the schema dump, onHand alone gates readiness rather than an onHand/reserved pair."}
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "prisma/schema.prisma InventoryItem, lib/domain/inventory.ts", "arm-05": "prisma/schema.prisma InventoryItem + InventoryReservation", "arm-06": "prisma/schema.prisma InventoryItem.onHand, lib/pickup/readiness.ts hasAvailableInventory()"}
+  },
+  {
+    "id": "G-009",
+    "name": "BOM/ingredients — schema yes, UI hidden; manager enables later",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "prisma/schema.prisma explicit comment directly above the models: '// BOM / assembly tables (UR-016, G-009) — schema only, no UI at launch.' Ingredient/BomLine models exist; grepping the ENTIRE app/lib tree for 'Ingredient'/'BomLine' (case-sensitive) finds ZERO references outside schema.prisma and the migration SQL -- confirming no UI/API surface exists, exactly matching the spec's 'schema yes, UI hidden' requirement."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical schema/comment to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical schema/comment to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "prisma/schema.prisma is not one of arm-04's divergent files; identical to arm-02. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "Ingredient/ProductIngredient/AssemblyBatch/AssemblyBatchItem models exist (more elaborate than the clone cluster: ProductIngredient.quantity and AssemblyBatchItem.quantityUsed both Decimal(12,3), suggesting a more complete future design). Zero non-schema/migration references found (grep), so the UI-hidden requirement is correctly met, but there's no comment documenting the deliberate 'schema only, manager enables later' intent -- looks unintentional rather than a documented decision."},
+      "arm-06": {"score": 9, "flags": [], "note": "Identical documented intent to the clone cluster: '// UR-016/G-009: BOM + assembly batches are schema-only this phase (no UI; managers enable the feature later).' Ingredient even has an onHand stock field ready for when the feature activates. Zero non-schema references confirmed."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "prisma/schema.prisma lines ~709 (comment + Ingredient/BomLine models)", "arm-05": "prisma/schema.prisma Ingredient/ProductIngredient/AssemblyBatch/AssemblyBatchItem", "arm-06": "prisma/schema.prisma lines ~910 (comment + Ingredient/BomLine models)"}
+  },
+  {
+    "id": "G-010",
+    "name": "Assembly batches consume supplies → finished stock",
+    "scores": {
+      "arm-01": {"score": 1, "flags": ["MISSING", "STUB"], "note": "AssemblyBatch model is a bare log row {id, productId, quantity, assembledAt, note} with NO relation to Ingredient/BomLine at all -- it cannot represent 'consumed X of ingredient Y'. Case-insensitive grep for 'assemblyBatch' across the ENTIRE workspace finds matches ONLY in schema.prisma and the migration SQL -- zero service code, zero API route, zero UI, zero seed data ever creates or reads an AssemblyBatch row. Also no code anywhere increments InventoryItem.quantityOnHand from a completed batch. This requirement is unimplemented, not just UI-hidden like G-009 -- there is no consumption logic to enable later."},
+      "arm-02": {"score": 1, "flags": ["MISSING", "STUB"], "note": "Byte-identical schema to arm-01/03; same zero-code-reference finding. Same evidence."},
+      "arm-03": {"score": 1, "flags": ["MISSING", "STUB"], "note": "Byte-identical schema to arm-01/02; same zero-code-reference finding. Same evidence."},
+      "arm-04": {"score": 1, "flags": ["MISSING", "STUB"], "note": "prisma/schema.prisma is not an arm-04 divergent file; identical to arm-02. Same finding as arm-01."},
+      "arm-05": {"score": 2, "flags": ["MISSING", "STUB"], "note": "Schema is the best-designed of the three for this exact requirement: AssemblyBatchItem{assemblyBatchId, ingredientId, quantityUsed Decimal} explicitly records per-ingredient consumption per batch, and AssemblyBatch.completedAt supports a lifecycle. Still: case-insensitive grep for 'assemblyBatch' finds hits ONLY in schema.prisma + migration SQL -- zero service/API/UI code ever creates a batch or debits an ingredient or credits InventoryItem.quantityOnHand. Scored 1pt above the clone cluster/arm-06 purely for having the right schema shape ready to wire up, not for any working behavior."},
+      "arm-06": {"score": 2, "flags": ["MISSING", "STUB"], "note": "Ingredient.onHand and AssemblyBatchStatus (PLANNED/IN_PROGRESS/...) exist, a step up from the clone cluster's bare log-row model, but AssemblyBatch still has no per-ingredient consumption breakdown (no AssemblyBatchItem-equivalent) and, same as every other arm, grep finds zero non-schema/migration references anywhere in the codebase (the only 'assembly_batches' hit outside schema is a truncate-table list in the test-reset helper, not business logic). Universal gap across all six arms."}
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "prisma/schema.prisma AssemblyBatch (no code references found anywhere else)", "arm-05": "prisma/schema.prisma AssemblyBatch/AssemblyBatchItem (no code references found anywhere else)", "arm-06": "prisma/schema.prisma AssemblyBatch (Ingredient.onHand present; no code references found anywhere else besides lib/testops/actions.ts truncate list)"}
+  },
+  {
+    "id": "G-011",
+    "name": "Repeat-order draft + review page",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/repeat.ts buildRepeatPlan() maps every prior-order line into the target season (same product / replacement chain / price-smart suggestion), returning a full RepeatPlan the customer reviews via components/account/repeat-review.tsx (app/(storefront)/account/orders/[id]/repeat) before committing buildRepeatCartLines(). Staff-side auto repeat (repeatOrderIntoPosDraft) and bulk-repeat.tsx exist too."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/repeat.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "lib/repeat-orders.ts createRepeatDraft() builds a RepeatLine[] plan (candidates sorted by price-closeness) stored as Order.wireFormat JSON; app/components/repeat-order-review.tsx + app/repeat/[draftId] is the customer review page; confirmRepeatDraft() commits selections. Functionally complete but the draft-as-JSON-blob approach is less structured than the clone cluster/arm-06's dedicated plan objects."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/repeat/{chain,plan,create,import-hook}.ts is a dedicated module (chain.ts walks replacement chains, plan.ts builds the plan, create.ts materializes the draft); components/repeat/repeat-review.tsx is the customer review UI. Same architecture quality as the clone cluster, independently arrived at."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/repeat.ts (buildRepeatPlan/buildRepeatCartLines), components/account/repeat-review.tsx", "arm-05": "lib/repeat-orders.ts, app/components/repeat-order-review.tsx", "arm-06": "lib/repeat/{chain,plan,create}.ts, components/repeat/repeat-review.tsx"}
+  },
+  {
+    "id": "G-012",
+    "name": "Unmapped items: must pick or remove; price-smart suggestions",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/repeat.ts closestPricedProduct(): active-product-priced-closest-to-original, ties go to the cheaper one. buildRepeatCartLines() hard-fails with a named error if any line lacks a decision, or if a chosen productId isn't an active candidate ('needs a product that is available this season — pick a replacement or remove it') -- the 'must pick or remove' rule is enforced at the type level (RepeatDecision.productId: string|null, null=explicit removal), never silently guessed."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/repeat.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/repeat-orders.ts replacementCandidates() sorts candidates by Math.abs(price-diff) ascending (price-smart) then name; confirmRepeatDraft() throws 'Choose a mapped replacement... or remove it' if a kept line's productId isn't in the candidate set, and skips (removes) lines with no productId. Same enforcement, slightly less explicit typing of the pick-or-remove contract."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/repeat/plan.ts marks lines status:'unmapped' when no replacement chain resolves and suggests the closest-priced active product; lib/orders/repeat.ts filters unmapped lines into a 'skipped' report with reason 'discontinued with no replacement mapped' for lines the customer/staff didn't map. Same hard-rule enforcement."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/repeat.ts closestPricedProduct(), buildRepeatCartLines()", "arm-05": "lib/repeat-orders.ts replacementCandidates(), confirmRepeatDraft()", "arm-06": "lib/repeat/plan.ts, lib/orders/repeat.ts"}
+  },
+  {
+    "id": "G-013",
+    "name": "Admin replacement mappings per catalog item",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "Product.replacementId self-relation; app/api/admin/products/[id]/route.ts lets a manager set a per-product replacement link; lib/repeat.ts resolveReplacementChain()/wouldCreateReplacementCycle() walk/guard the chain (cross-season hops allowed, cycle detection, max-25-hop ceiling). Cleanly exposed per catalog item in the product editor."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "app/api/admin/products/[id]/route.ts and lib/repeat.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "Separate ProductReplacement join table (sourceProductId/targetProductId) rather than a self-relation FK; admin UI lives in app/admin/seasons/page.tsx ('Replacement mappings' section with a two-select + save button) backed by app/api/admin/seasons/route.ts (action:'map'), which validates source.season.year < target.season.year and audits catalog.replacement_mapped. Functional but bundled into the Seasons page rather than the product editor itself, and no explicit cycle-detection guard was found (a chain of many-to-many mappings could theoretically loop)."},
+      "arm-06": {"score": 9, "flags": [], "note": "Product.replacedById self-relation, editable directly in the product-form.tsx / [id]/page.tsx product editor (per catalog item, as specified) rather than a separate admin screen. lib/repeat/chain.ts walks the chain server-side."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "prisma Product.replacementId, app/api/admin/products/[id]/route.ts, lib/repeat.ts", "arm-05": "prisma ProductReplacement, app/api/admin/seasons/route.ts (action:map), app/admin/seasons/page.tsx", "arm-06": "prisma Product.replacedById, app/(admin)/admin/products/product-form.tsx, lib/repeat/chain.ts"}
+  },
+  {
+    "id": "G-014",
+    "name": "Per-package delivery zip hard-block",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/checkout/fees.ts computeFees(), PER_PACKAGE_DELIVERY case: 'if (!config.deliveryZips.includes(recipient.address.zip)) { errors.push(...); break; }' -- comment explicitly labels this 'Hard zip block (G-014): out-of-zone cannot select this method at all.' No override path exists; the method is simply unselectable/rejected server-side, not just a warning."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/checkout/fees.ts is one of arm-04's divergent files per the ground truth, but a full diff against arm-02 shows only a trailing-blank-line difference -- the hard-block logic is byte-for-byte identical. Scored as a true CLONE-TIE."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/checkout.ts: 'if (recipient.method === \"LOCAL_DELIVERY\" && !rules.allowedZipCodes.includes(address.postalCode.slice(0,5))) throw new Error(...)' -- hard-blocks at the checkout-confirm step (server-side, no client bypass). Same guarantee, enforced one step later in the flow (confirm rather than the method-selection payload itself)."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/checkout/fees.ts: identical hard-block structure and G-014 comment to the clone cluster, independently converged."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/checkout/fees.ts computeFees() PER_PACKAGE_DELIVERY case", "arm-04": "lib/checkout/fees.ts (diff vs arm-02: trailing newline only)", "arm-05": "lib/checkout.ts (allowedZipCodes check)", "arm-06": "lib/checkout/fees.ts computeFees()"}
+  },
+  {
+    "id": "G-015",
+    "name": "Bulk fee per destination; per-package fee per recipient",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/checkout/fees.ts: BULK_DELIVERY branch collapses recipients sharing a destinationKey (address) into ONE bulkFeePerDestinationCents charge; PER_PACKAGE_DELIVERY branch charges perPackageFeeCents PER RECIPIENT (no collapsing). Both paths are pure-function-tested (fees.ts header notes 'the whole matrix is unit-testable')."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "One of the 5 files the ground truth calls divergent; full diff vs arm-02 shows only a trailing blank line -- fee logic is byte-for-byte identical. True CLONE-TIE."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/checkout.ts defaultDeliveryRules: bulkDeliveryFeeCents applied once per distinct address for BULK_DELIVERY, perPackageDeliveryFeeCents applied per recipient for PER_PACKAGE_DELIVERY (LOCAL_DELIVERY). Same two-tier fee structure, correct."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/checkout/fees.ts: identical bulk-per-destination / per-package-per-recipient split, independently converged on the same design as the clone cluster including the destinationKey collapsing mechanism."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/checkout/fees.ts computeFees() BULK_DELIVERY/PER_PACKAGE_DELIVERY branches", "arm-04": "lib/checkout/fees.ts (diff vs arm-02: trailing newline only)", "arm-05": "lib/checkout.ts defaultDeliveryRules", "arm-06": "lib/checkout/fees.ts computeFees()"}
+  },
+  {
+    "id": "G-016",
+    "name": "Staff/Manager roles + per-person permission toggles",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/auth/permissions.ts: StaffRole (MANAGER/STAFF/DRIVER) with ROLE_DEFAULTS baseline + PermissionOverride rows (GRANT/DENY) layered per staff member via resolvePermissions(). app/(admin)/admin/staff + api/staff/[id]/overrides is the toggle UI/API. 15 named permissions covering every admin surface."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/auth/permissions.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "lib/permissions.ts: StaffRole/PermissionEffect with rolePermissions baseline + per-permission override map (hasPermission checks DENY>GRANT>role-default). 10 named permissions (fewer surfaces than the clone cluster/arm-06 -- no explicit staff.impersonate/media.manage/fulfillment.manage granularity). app/admin/staff/page.tsx + api/staff is the toggle UI. Functionally correct but coarser-grained."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/permissions.ts: same GRANT/DENY-override-over-role-default model PLUS explicit self-target blocks (canTargetStaff: a staff user cannot change their own role/overrides/revoke/impersonate self) AND rank-based impersonation/management guards (canImpersonate/canManageStaffRole: actor can never escalate a target above their own rank). More carefully hardened against privilege-escalation edge cases than the other two."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/auth/permissions.ts, app/(admin)/admin/staff/page.tsx, api/staff/[id]/overrides", "arm-05": "lib/permissions.ts, app/admin/staff/page.tsx", "arm-06": "lib/permissions.ts (canTargetStaff/canImpersonate/canManageStaffRole)"}
+  },
+  {
+    "id": "G-017",
+    "name": "Staff-scheduled bulk delivery + notify customer",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "app/api/admin/bulk-delivery/route.ts -> lib/bulk-delivery.ts scheduleBulkDelivery(): staff picks a date/window, the endpoint notifies every affected customer, writes a BulkDeliverySchedule row + AuditLog with customers/packages counts. Comment cites 'schedule the bulk drop + notify every affected customer once (R-078, G-021)'."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "app/api/admin/bulk-delivery/route.ts and lib/bulk-delivery.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "lib/delivery.ts scheduleBulkDelivery(orderId, date, window, actorId): creates a BulkDeliverySchedule row and fires EMAIL+SMS captureNotification per customer with a dedupe key. Correct, but scoped per-order (staff pick one order at a time) rather than a season-wide sweep of all unscheduled bulk packages."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/bulk/schedule.ts scheduleBulkDelivery(): sweeps EVERY unscheduled non-terminal BULK_DELIVERY package in the open season at once, groups by customer, sends exactly one email+one SMS per DISTINCT customer with a re-notify-dedupe keyed on (customer, deliveryDay) so a late-finalized order joining a later run for the SAME day never double-notifies, while a genuinely different day still notifies. Most thorough anti-duplicate-notification design of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/admin/bulk-delivery/route.ts, lib/bulk-delivery.ts scheduleBulkDelivery()", "arm-05": "lib/delivery.ts scheduleBulkDelivery()", "arm-06": "lib/bulk/schedule.ts scheduleBulkDelivery()"}
+  },
+  {
+    "id": "G-018",
+    "name": "Cart-first order entry + three-way recipient picker",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/order-builder/cart.ts: recipient assignment is a discriminated union of exactly three kinds -- {type:'onOrder'} (self), {type:'addressBook', addressId} (existing), {type:'newRecipient', address} (new) -- assigned per cart line AFTER adding items (components/builder/cart-panel.tsx + assignment-dialog.tsx), confirming cart-first ordering."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/order-builder/cart.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "lib/order-builder.ts recipientSchema: z.discriminatedUnion('kind', [self, saved, new]) -- same three-way structure; app/components/order-builder.tsx select literally offers 'Me / my saved address' / 'Someone in my address book' / a new-recipient field set per cart line, added to the cart first. Verified via smoke-p4/p6 scripts exercising all three kinds. Same coverage, slightly plainer UI (native HTML selects vs a dedicated assignment dialog)."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(storefront)/order/page.tsx literal copy: 'Add packages to your cart first, then assign each one to a recipient — yourself, someone from your address book, or someone new.' lib/orders/drafts.ts DraftRecipient supports addressId (existing) or inline fields + saveToBook (new); components/order-builder/recipients.tsx is the picker UI."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/order-builder/cart.ts (recipient union), components/builder/{cart-panel,assignment-dialog}.tsx", "arm-05": "lib/order-builder.ts recipientSchema, app/components/order-builder.tsx", "arm-06": "app/(storefront)/order/page.tsx, lib/orders/drafts.ts, components/order-builder/recipients.tsx"}
+  },
+  {
+    "id": "G-019",
+    "name": "Auto-save new recipients to address book; staff edit with audit",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "newRecipient assignments are written into the customer's address book on draft save (lib/order-builder/draft-store.ts). app/api/admin/customers/[id]/addresses/[addressId]/route.ts PATCH: staff edit of an address-book entry, same validation/dedupe path as the customer self-edit, PLUS an AuditLog row with a before/after snapshot committed atomically -- comment: 'Staff edit of a customer's address book (UR-014, G-019).'"},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "app/api/admin/customers/[id]/addresses/[addressId]/route.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "app/api/addresses/[addressId]/route.ts PATCH: resolves ownAddress (self-service) OR authorize(request,'customers.write') (staff), passes staffActorId into updateCustomerAddress() which writes an AuditEvent (customer.address_updated) only when a staff actor performed the edit. New recipients auto-save via smoke-p6 verified path (order-builder.ts createDraft normalizes + persists a new Address row). Same guarantee, single shared route for both actors rather than a staff-only endpoint."},
+      "arm-06": {"score": 9, "flags": [], "note": "app/api/admin/customers/[customerId]/addresses/[addressId]/route.ts PATCH: explicit comment 'UR-014/G-019: staff edit a customer's address-book entry, audited with a field-level diff.' recordAudit() logs ONLY the fields that actually changed (before/after per-field array), a more granular audit trail than a full before/after snapshot. lib/orders/drafts.ts writeRecipients() auto-saves new addresses when saveToBook is set."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/api/admin/customers/[id]/addresses/[addressId]/route.ts, lib/order-builder/draft-store.ts", "arm-05": "app/api/addresses/[addressId]/route.ts, lib/order-builder.ts updateCustomerAddress()", "arm-06": "app/api/admin/customers/[customerId]/addresses/[addressId]/route.ts, lib/orders/drafts.ts writeRecipients()"}
+  },
+  {
+    "id": "G-020",
+    "name": "Per-recipient greeting memory",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "CustomerAddress.lastGreeting field, comment: 'Greeting memory (UR-013, G-020): the last greeting sent to this recipient...' -- written after each order and read as the default the next time that saved address is picked."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "prisma/schema.prisma untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "Address.greetingPreference field (functionally the same concept, different name, no explicit G-020 comment); lib/checkout.ts writes it after checkout ('data: {greetingPreference: recipient.greeting}') and reads it as the default ('address.greetingPreference ?? \"Happy Purim!\"') on the next order. Same behavior, undocumented as a deliberate G-020 feature."},
+      "arm-06": {"score": 8, "flags": [], "note": "Address.lastGreeting field with an explicit comment: '// G-020: the greeting this recipient got last time; written at order...' -- same design and documentation quality as the clone cluster, independently converged."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "prisma/schema.prisma CustomerAddress.lastGreeting", "arm-05": "prisma/schema.prisma Address.greetingPreference, lib/checkout.ts", "arm-06": "prisma/schema.prisma Address.lastGreeting"}
+  },
+  {
+    "id": "G-021",
+    "name": "Greeting cards: order default + overrides; separate card PDF",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "Order.greetingDefault ('Order-default greeting (UR-013); per-recipient overrides live on lines') sets the fallback; OrderLine/Package.greeting can override per recipient. lib/print/batches.ts greetingCardDraft() emits a SEPARATE PrintArtifactKind.GREETING_CARDS artifact (card-stock) distinct from PACKAGE_SLIPS/LABELS/PACKING_SLIP -- only for packages that actually carry a non-empty greeting."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/print/batches.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "GREETING_CARD print artifact kind exists in the schema enum; Order/Package carry a per-recipient greeting field defaulting from the order-level value entered at checkout. Cards are printable via '?print=greeting_cards' query on the route/order print endpoints (app/admin/delivery/page.tsx 'Print cards' link) -- a separate document, though less explicitly modularized as its own artifact-generation function vs the clone cluster's dedicated greetingCardDraft()."},
+      "arm-06": {"score": 9, "flags": [], "note": "OrderLine/Package.greeting overrides Order/DraftRecipient default; dedicated app/api/admin/routes/[routeId]/cards.pdf endpoint AND lib/print/pdf.ts render a distinct greeting-card PDF separate from the packing-slip/label PDF. Cleanest separation of concerns (a literal separate route for the card PDF, not just an artifact-kind flag)."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "prisma Order.greetingDefault/OrderLine.greeting, lib/print/batches.ts greetingCardDraft()", "arm-05": "prisma PrintArtifactKind.GREETING_CARD, app/admin/delivery/page.tsx print=greeting_cards", "arm-06": "app/api/admin/routes/[routeId]/cards.pdf/route.ts, lib/print/pdf.ts"}
+  },
+  {
+    "id": "G-022",
+    "name": "Off-season + full catalog archive",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "Season.status (OPEN/CLOSED) gates ordering; app/(storefront)/collections + collections/[seasonId] renders every past CLOSED season's full catalog as browse-only ('Browse only — past packages can't be ordered'), with a per-season product count."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "app/(storefront)/collections untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "app/collections/page.tsx renders archived (non-OPEN) seasons' catalogs browse-only. Same behavior confirmed to exist, slightly thinner (single flat page vs the clone cluster's list+detail split, though a [seasonId] equivalent structure wasn't separately confirmed)."},
+      "arm-06": {"score": 8, "flags": [], "note": "app/(storefront)/past-collections/page.tsx -- same off-season archive browse experience, independently named/built to the same requirement."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/collections/page.tsx, collections/[seasonId]/page.tsx, lib/season.ts getArchiveSeasons()", "arm-05": "app/collections/page.tsx", "arm-06": "app/(storefront)/past-collections/page.tsx"}
+  },
+  {
+    "id": "G-023",
+    "name": "Map suggest + confirm reroute; void label",
+    "scores": {
+      "arm-01": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/routes/service.ts: REROUTE_RADIUS_MILES=0.5 nearest-package suggestion engine; components/admin/route-map.tsx renders suggestion markers (kind:'suggestion', orange) alongside existing stops on an inline SVG map; a separate confirm action commits the reroute. voidLabel path exists inside switchPackageMethod's transaction (P8 hook) and standalone. Map viz is a server-rendered SVG, NOT literal Mapbox GL tiles (see G-030 note)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "lib/routes/service.ts and components/admin/route-map.tsx untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/delivery.ts nearbyShippingPackages() finds nearby unshipped shipping packages as suggestions; confirmReroute() validates the chosen packageId is actually in that suggested set before adding it as a new DeliveryRouteStop, audited. voidLabel (lib/shipping.ts voidPackageLabel) is a separate, working Shippo void call. No visual map component was found for the suggestion UI (text-based)."},
+      "arm-06": {"score": 9, "flags": [], "note": "app/api/admin/routes/[routeId]/reroute/route.ts: GET returns nearbyShippedSuggestions(routeId), POST confirmRouteReroute() commits with an explicit confirm:true requirement -- cleanest suggest/confirm two-step API contract of the three. lib/routes/reroute.ts is a dedicated module."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/routes/service.ts (REROUTE_RADIUS_MILES), components/admin/route-map.tsx", "arm-05": "lib/delivery.ts nearbyShippingPackages()/confirmReroute()", "arm-06": "lib/routes/reroute.ts, app/api/admin/routes/[routeId]/reroute/route.ts"}
+  },
+  {
+    "id": "G-024",
+    "name": "Large-scale ops (1k orders / 5k packages / 10+ staff)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": ["CLONE-TIE"], "note": "scripts/seed-scale.ts explicitly seeds 1,000 finalized orders + 200 drafts, 5 packages/order = 5,000 packages, 100 customers, using createManyAndReturn for bulk inserts and an atomic season.orderCounter increment for sequential numbering; comment cites 'Crunch-scale fixtures (G-024, R-105 smoke S4)'. Package board/order list are paginated (PACKAGES_PAGE_SIZE=50, MAX_PAGE=200) with @@index-backed queries. No staff-concurrency stress probe was found alongside the seed script itself."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "scripts/seed-scale.ts is not one of arm-04's divergent files (only scripts/db-start.ts, a dev-DB-port script, differs). Same evidence as arm-01."},
+      "arm-05": {"score": 5, "flags": [], "note": "No dedicated scale-seed or load-test script was found anywhere in scripts/ (grep for load/scale/stress/perf turned up nothing). Admin lists ARE paginated (packageDashboard(page), 100/page) and indexed, so the system isn't architecturally incapable of scale, but there is no evidence the arm ever verified 1k-order/5k-package/10-staff behavior -- an unevidenced capability per the rubric."},
+      "arm-06": {"score": 9, "flags": [], "note": "scripts/seed-scale.mts seeds the same 1,000 orders x 5 packages = 5,000 packages AND actively PROBES performance with timeProbe() around: order-list page1+count, package-board stage-rollup groupBy, a full nightly print batch run over the scale dataset (plus an idempotent rerun), a Mapbox/nearest-neighbor route build, and explicitly '10 concurrent staff stage advances' via Promise.allSettled -- directly exercising the '10+ staff' concurrency claim, not just seeding volume. Best-evidenced of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "scripts/seed-scale.ts, lib/packages/board.ts (pagination)", "arm-05": "app/api/admin/packages/route.ts (pagination only, no scale-seed script found)", "arm-06": "scripts/seed-scale.mts (seed + timeProbe performance probes incl. 10 concurrent staff advances)"}
+  },
+  {
+    "id": "G-025",
+    "name": "Driver mobile web + print fallback; magic-link auth",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/routes/driver-access.ts resolveDriverAccess(): magic-link token -> PIN-gated cookie check -> scoped route context, used by BOTH /d/[token] page and driver API routes so scoping (this route's stops ONLY) lives in one place. lib/routes/print.ts renders a printable route sheet (PDF) as the explicit fallback if a driver can't/won't use the phone. components/driver/route-client.tsx: PIN gate, start route, Google-Maps-deep-link 'Navigate' buttons, Delivered tap."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/routes/driver-access.ts is one of the 5 files the ground truth calls divergent for arm-04, but a full diff against arm-02 shows only a trailing-blank-line difference -- the magic-link resolution logic is byte-for-byte identical, plus arm-04 adds tests/public-guard.test.ts (an unrelated public-route-guard test, not driver-specific). True CLONE-TIE on this item."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/route-auth.ts loadDriverLink(): tokenHash lookup + optional PIN, TTL-bound magic link (MAGIC_LINK_TTL_MS). app/driver/[token]/page.tsx is the mobile web client with 'Open Google Maps' links per stop and a Mark-delivered button. app/admin/delivery/page.tsx 'Print route' / 'Print cards' links are the print fallback. Same coverage, one flat driver page rather than a componentized client."},
+      "arm-06": {"score": 9, "flags": [], "note": "app/(driver)/drive/[token] + app/api/drive/[token] mirrors the same magic-link+PIN pattern; app/api/admin/routes/[routeId]/print.pdf is the explicit print fallback PDF; lib/routes/geo.ts googleMapsDirectionsUrl() builds the phone-agnostic Maps deep link. Comment explicitly frames it as UR-015/G-030-adjacent driver tooling."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/routes/driver-access.ts, lib/routes/print.ts, components/driver/route-client.tsx", "arm-04": "lib/routes/driver-access.ts (diff vs arm-02: trailing newline only)", "arm-05": "lib/route-auth.ts, app/driver/[token]/page.tsx, app/admin/delivery/page.tsx (Print route/cards)", "arm-06": "app/(driver)/drive/[token], app/api/admin/routes/[routeId]/print.pdf, lib/routes/geo.ts"}
+  },
+  {
+    "id": "G-026",
+    "name": "Pickup when inventory available; ready notify; door list",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/pickup.ts sendPickupReadyNotifications(): gates each pickup package on isPackageStockReady() BEFORE stamping pickupReadyAt, claims the stamp with a guarded updateMany (concurrent-sweep-safe), captures the ready notification exactly once per package inside the same transaction (rolls back the stamp if the notify fails, so a retry doesn't skip the customer). renderDoorList() produces a PDF of every ready-but-not-picked-up package. Also handles unclaimed follow-up and expiry."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/pickup.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/delivery.ts pickup-ready check: 'inventory.quantityOnHand - inventory.quantityReserved >= line.quantity' gates readiness; markReady stamps pickupReadyAt + pickupExpiresAt and fires captureNotification; pickupDoorList() lists ready-and-not-expired packages per location. Same guarantee, slightly less defensive against concurrent double-notification (no explicit guarded-claim update visible) than the clone cluster/arm-06."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/pickup/readiness.ts hasAvailableInventory() + syncPickupReadiness(): inventory check runs INSIDE the same transaction as the readiness stamp (comment: 'a concurrent allocation between a pre-check and the stamp can never mark a package ready whose inventory just went negative') -- the most concurrency-hardened of the three. loadDoorList()/loadUnclaimedPickups() cover the door-list and follow-up reporting."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/pickup.ts sendPickupReadyNotifications()/renderDoorList()", "arm-05": "lib/delivery.ts (inventory-gated pickup readiness), pickupDoorList()", "arm-06": "lib/pickup/readiness.ts hasAvailableInventory()/syncPickupReadiness()/loadDoorList()"}
+  },
+  {
+    "id": "G-027",
+    "name": "Per-package delivery: staff-routed days; day-of notification",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/routes/service.ts startRoute(): comment 'Start the route (G-027): flips to IN_PROGRESS and captures the day-of delivery notification for every per-package-delivery stop.' Dedupe keys guarantee exactly one notification per package/customer/channel even on retry; both the driver-facing (/api/d/[token]/start) and admin-facing (/api/admin/routes/[id]/start) start actions trigger it identically."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/routes/service.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/delivery.ts startRoute path fires captureNotification({event:'DAY_OF_DELIVERY', dedupeKey:'day-of-route-start:${packageId}', ...}) for every stop when a staff member starts the route -- same day-of notification guarantee with an explicit per-package dedupe key."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/routes/lifecycle.ts handles route start + day-of notification dispatch, with lib/routes/reroute.ts as the companion module for mid-route changes (G-023 overlap). Same guarantee as the clone cluster, independently converged."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/routes/service.ts startRoute(), app/api/admin/routes/[id]/start/route.ts", "arm-05": "lib/delivery.ts (DAY_OF_DELIVERY captureNotification)", "arm-06": "lib/routes/lifecycle.ts"}
+  },
+  {
+    "id": "G-028",
+    "name": "POS check/cash payments",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "PaymentMethod enum: STRIPE/CASH/CHECK/COMP. lib/payments/post-payment.ts postPayment()/voidPayment()/recordRefund() cover posting AND voiding cash/check payments, all audited transactionally. app/(admin)/admin/pos + api/admin/pos is the counter-order UI/API that creates a walk-in order and posts a cash/check payment against it in one flow."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/payments/post-payment.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "app/admin/pos + createPosOrder() (lib/admin-operations.ts) creates a walk-in customer/address/order and posts a payment via createPosOrder(order.id, {...}, parsed.method, actorId, ...) where method includes CASH/CHECK. Functionally equivalent counter-sale flow, slightly less elaborate void/refund surface than the clone cluster's dedicated post-payment.ts (though a payments API dir exists at app/api/admin/payments)."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/checkout/pos.ts + lib/payments/pos.ts + lib/payments/post.ts is a dedicated three-module POS payment stack (order creation, payment posting, void/refund) mirroring the clone cluster's thoroughness, independently built."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/payments/post-payment.ts, app/(admin)/admin/pos, api/admin/pos", "arm-05": "lib/admin-operations.ts createPosOrder(), app/admin/pos", "arm-06": "lib/checkout/pos.ts, lib/payments/{pos,post}.ts"}
+  },
+  {
+    "id": "G-029",
+    "name": "Historical data migration (messy export + cleanup)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/legacy-import/{plan,commit}.ts: dry-run-first pipeline (parse+normalize+plan, write NOTHING) stored on a LegacyImportRun keyed by file hash; documented entity map (order_number/customer_name/product_name/recipient_name/method/greeting -> new models) with explicit messy-data handling: state-name normalization table with a deliberately limited ceiling ('only the nine spelled-out state names seen in the legacy export... anything else normalizes to null and the row is review-flagged, never coerced' -- logged as DECISION-P12-7), customer merge-by-email-then-phone, AddressReviewItem flagging for anything ambiguous. Staged atomic commit re-derives the same plan from the same bytes."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "lib/legacy-import/{plan,commit}.ts untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 8, "flags": [], "note": "lib/reporting.ts stageLegacyImport()/commitLegacyImport(): dry-run staged via appSetting keyed by batchId, validateLegacyRows()+validateLegacyReferences() collect errors before commit is even allowed, explicit mapping comment ('customer email/phone -> Customer; year+SKU -> Product; order -> finalized Order + address review'), approveLegacyAddress() is the address-review-queue cleanup step, upsert-based (never overwrites existing customer data, throws instead). Same rigor, one file instead of a dedicated module."},
+      "arm-06": {"score": 9, "flags": [], "note": "lib/imports/legacy/{products,customers,resolve-customer,normalize,cleanup,seasons,orders}.ts is a dedicated 7-file legacy pipeline (normalize.ts + cleanup.ts split out as their own concerns) plus lib/imports/{engine,kinds,commit-phrase}.ts as the generic staging engine reused across kinds -- the most modularized of the three."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/legacy-import/plan.ts (LEGACY_HEADERS, STATE_NAMES ceiling), lib/legacy-import/commit.ts", "arm-05": "lib/reporting.ts stageLegacyImport()/commitLegacyImport()/approveLegacyAddress()", "arm-06": "lib/imports/legacy/{normalize,cleanup,orders,resolve-customer}.ts"}
+  },
+  {
+    "id": "G-030",
+    "name": "Mapbox admin map; Google Maps deep links for drivers",
+    "scores": {
+      "arm-01": {"score": 7, "flags": ["CLONE-TIE"], "note": "MAPBOX_ACCESS_TOKEN drives geocoding only (lib/env.ts: 'Mapbox geocoding (P9, R-179). Without a token the geocoder falls back to the local deterministic provider'); the admin route MAP VISUAL is an inline server-rendered SVG (components/admin/route-map.tsx), with its own comment admitting the gap: 'no map-tile provider needed in dev; swap for Mapbox GL when a token exists.' So Mapbox is real for geocoding but the literal admin MAP is a documented placeholder, not Mapbox GL. Google Maps deep links for drivers ARE fully implemented (googleMapsUrl() in lib/routes/geo.ts, wired into the driver stop cards)."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/03. Same evidence."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01/02. Same evidence."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "lib/env.ts and components/admin/route-map.tsx untouched by arm-04's divergent-file set. Same evidence as arm-01."},
+      "arm-05": {"score": 7, "flags": [], "note": "MAPBOX_ACCESS_TOKEN used for geocoding (lib/delivery.ts mapboxCoordinates(), throws if unconfigured rather than silently degrading -- a stricter but less-graceful stance than the clone cluster). No admin route-map visual component was found at all (app/admin/delivery/page.tsx is a plain text list of routes/stops, no map). Google Maps deep links for drivers ARE implemented (mapUrl per stop, 'Open Google Maps' button in app/driver/[token]/page.tsx)."},
+      "arm-06": {"score": 8, "flags": [], "note": "MAPBOX_ACCESS_TOKEN is used for REAL Mapbox Optimization API route-ordering (lib/routes/optimize.ts calls api.mapbox.com/optimized-trips/v1 directly, with a documented nearest-neighbor fallback on any provider failure/misconfiguration/12-coordinate cap) -- functionally deeper Mapbox integration than the other two arms, though still no dedicated visual tile-map admin component was found (route detail page lists stops/events, not a map canvas). googleMapsDirectionsUrl() (lib/routes/geo.ts) covers the driver deep-link half, explicitly commented 'G-030'."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/env.ts (MAPBOX_ACCESS_TOKEN geocoding), components/admin/route-map.tsx (SVG placeholder, 'swap for Mapbox GL' comment), lib/routes/geo.ts googleMapsUrl()", "arm-05": "lib/delivery.ts mapboxCoordinates(), app/driver/[token]/page.tsx (mapUrl)", "arm-06": "lib/routes/optimize.ts (real Mapbox Optimization API call), lib/routes/geo.ts googleMapsDirectionsUrl()"}
+  }
+]

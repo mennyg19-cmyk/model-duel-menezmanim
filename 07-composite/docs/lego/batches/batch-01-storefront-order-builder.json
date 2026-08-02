@@ -1,0 +1,467 @@
+[
+  {
+    "id": "R-001",
+    "name": "Mission-led storefront homepage",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Hero with tagline/mission copy, store-open-aware CTAs, impact stats, how-it-works, testimonials, newsletter CTA all on one page. Stats are hardcoded marketing copy, not DB-driven."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for this file; arm-04's unique files (checkout-form.tsx etc.) don't touch the homepage."},
+      "arm-05": {"score": 6, "flags": [], "note": "Real hero/mission/CTA/impact-bar/3-cards/1-testimonial in a single terse file; functional but noticeably thinner copy and structure than the other arms."},
+      "arm-06": {"score": 8, "flags": [], "note": "Hero with org tagline/mission, store-open-aware CTAs, how-it-works, testimonials, newsletter CTA. Impact stats pulled from live Prisma counts (packageCount/orderCount/customerCount) rather than hardcoded copy — more real than arm-01's version."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(storefront)/page.tsx", "arm-05": "app/page.tsx", "arm-06": "app/(storefront)/page.tsx"}
+  },
+  {
+    "id": "R-002",
+    "name": "Store-open-aware homepage CTAs + closure enforcement",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Homepage CTAs branch on getOpenSeason(); /catalog and /order pages independently re-check season server-side and render a closed notice with zero ordering UI in the response when closed — nothing to bypass client-side."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "CTA swap present on homepage/catalog; /order redirects server-side to /catalog when no season is open. Enforcement exists but is coarser (a redirect vs. a dedicated closed-state render)."},
+      "arm-06": {"score": 9, "flags": [], "note": "CTAs branch on openSeason on homepage; /packages checks openSeason server-side and renders closed notice with no product data leaked when closed."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/order/page.tsx", "arm-05": "app/order/page.tsx", "arm-06": "app/(storefront)/packages/page.tsx"}
+  },
+  {
+    "id": "R-003",
+    "name": "Current-season package catalog",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "getCatalogProducts(seasonId) returns only active products of the open season with options/inventory/image included; clean separation from archive."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "getStorefront() pulls the OPEN season's active non-add-on products with options/add-ons/inventory. Works but the catalog vs archive split is looser (single query fn returning both)."},
+      "arm-06": {"score": 8, "flags": [], "note": "PackagesPage queries active products of the open season only, with options/inventory/media joined cleanly via catalogProductInclude helper."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/catalog.ts", "arm-05": "lib/storefront.ts", "arm-06": "app/(storefront)/packages/page.tsx"}
+  },
+  {
+    "id": "R-004",
+    "name": "Package detail and option pricing",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "/catalog/[slug] dedicated page: image, description, base price, live option-pricing widget (components/storefront/option-pricing.tsx), sold-out badge, CTA to order."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 2, "flags": ["MISSING"], "note": "No /catalog/[slug] or equivalent detail route exists at all — only an inline 'quick view' panel on the catalog grid substitutes for a detail page. Option pricing shown only inside that inline panel."},
+      "arm-06": {"score": 8, "flags": [], "note": "Dedicated /packages/[slug] detail page exists (confirmed present) alongside the quick-view dialog; option pricing shown via priceLabel()/lowestPriceCents() helpers with per-option deltas."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/catalog/[slug]/page.tsx", "arm-05": "app/components/catalog-grid.tsx", "arm-06": "app/(storefront)/packages/[slug]/page.tsx"}
+  },
+  {
+    "id": "R-005",
+    "name": "Public past-collections archive",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "/collections lists archived seasons with product counts; /collections/[seasonId] (not opened but referenced) shows browse-only products. ProductGrid canOrder=false disables order CTAs on archive."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "/collections renders every CLOSED season's products inline with an explicit 'Archived collection · not available to buy' label and no buy CTA — simple but correct and complete for the requirement."},
+      "arm-06": {"score": 8, "flags": [], "note": "/past-collections lists CLOSED seasons that actually ran (has orders), browse-only with no price CTA; deliberately excludes never-opened season shells — a sharper real-world rule than the clone cluster's version."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(storefront)/collections/page.tsx", "arm-05": "app/collections/page.tsx", "arm-06": "app/(storefront)/past-collections/page.tsx"}
+  },
+  {
+    "id": "R-006",
+    "name": "Product quick-view dialog",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "True modal (role=dialog, aria-modal, focus trap, Escape close, body scroll lock, focus restore to trigger) with image/description/price/options and CTA."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 5, "flags": [], "note": "Quick view is an inline <section> toggled by state, not a real dialog: no role=dialog/aria-modal, no focus trap, no Escape handling, no scroll lock. Shows description/price/options correctly though."},
+      "arm-06": {"score": 9, "flags": [], "note": "True modal dialog with focus management, Escape close, and Tab-cycling focus trap; shows category/description/sold-out badge/options with price deltas/CTA."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/storefront/product-grid.tsx", "arm-05": "app/components/catalog-grid.tsx", "arm-06": "app/(storefront)/packages/packages-grid.tsx"}
+  },
+  {
+    "id": "R-007",
+    "name": "Homepage impact-stats bar",
+    "scores": {
+      "arm-01": {"score": 6, "flags": [], "note": "3-stat bar present and well-styled, but the numbers (\"500+\", \"12,000\", \"100%\") are hardcoded copy, not derived from real data — theater dressed as an impact stat."},
+      "arm-02": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 6, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 3, "flags": ["STUB"], "note": "Single hardcoded inline string of 3 numbers embedded in JSX text, no component, no real data behind it at all."},
+      "arm-06": {"score": 8, "flags": [], "note": "3-stat bar backed by live Prisma counts (packageCount, orders FINALIZED count, customer count) with an explicit code comment acknowledging what the labels actually mean vs. imply — real and honestly caveated."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "app/(storefront)/page.tsx", "arm-06": "app/(storefront)/page.tsx"}
+  },
+  {
+    "id": "R-008",
+    "name": "Homepage How It Works / mission / testimonials / final CTA",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "All four sections present: numbered how-it-works (3 steps), mission copy in hero, 3 testimonials, final open/closed-aware CTA section."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 5, "flags": [], "note": "3 how-it-works cards and 1 testimonial present but terse/minimal; no distinct final CTA section beyond the hero buttons (newsletter footer substitutes)."},
+      "arm-06": {"score": 8, "flags": [], "note": "Numbered how-it-works (3 steps), 3 testimonials, and a dedicated final CTA section (\"Never miss a deadline\" / newsletter) all present and well-structured."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/page.tsx", "arm-06": "app/(storefront)/page.tsx"}
+  },
+  {
+    "id": "R-009",
+    "name": "Newsletter subscribe + preferences + tokenized unsubscribe",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Subscribe endpoint (rate-limited, upserts subscriber); preferences page gated by verifyNewsletterToken; PATCH preferences + POST unsubscribe both token-gated. No email double opt-in confirmation flow."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 8, "flags": [], "note": "Full double opt-in confirmation flow (confirmationToken hashed+expiring), HMAC-signed preference/unsubscribe tokens with key rotation support, timing-safe comparison. More rigorous token design than the clone cluster."},
+      "arm-06": {"score": 8, "flags": [], "note": "Subscribe/unsubscribe/preferences all present with HMAC-signed tokens; 3 independent preference toggles plus full unsubscribe, all posted with the token."}
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/newsletter/preferences/route.ts", "arm-05": "lib/newsletter.ts", "arm-06": "lib/newsletter/tokens.ts"}
+  },
+  {
+    "id": "R-010",
+    "name": "First-run setup page (empty-staff bootstrap)",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Page checks staffCount server-side and shows a locked message + link to /login when staff already exist, otherwise renders the setup form."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "API has a real canBootstrap()/createFirstManager() guard (staff count = 0), and setup requires an authenticated identity to promote to Manager; page itself doesn't render a locked state, relying entirely on the API 409 to block re-use."},
+      "arm-06": {"score": 7, "flags": [], "note": "Page checks staffCount server-side, shows locked message when staff exist, otherwise the setup form; bootstrap presumably self-locks after first manager is created."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/setup/page.tsx", "arm-05": "app/api/setup/route.ts", "arm-06": "app/setup/page.tsx"}
+  },
+  {
+    "id": "R-011",
+    "name": "Storefront shell: sticky header, desktop nav, mobile menu, user menu, footer",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Sticky header (CSS sticky), desktop nav, mobile menu with click-outside/Escape dismissal, user menu (customer vs. signed-out vs. staff-sign-in), footer with newsletter."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "Sticky header (confirmed via CSS position:sticky), toggleable mobile nav, links to account/staff, footer with newsletter form. No dedicated user-menu dropdown (just a flat 'My account' link) — simpler than the other arms."},
+      "arm-06": {"score": 8, "flags": [], "note": "Sticky header, desktop nav, separate MobileMenu and UserMenu components, footer with newsletter — same shape as the clone cluster, cleanly split into its own component files."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/storefront/site-header.tsx", "arm-05": "app/components/storefront-shell.tsx", "arm-06": "components/storefront/site-header.tsx"}
+  },
+  {
+    "id": "R-012",
+    "name": "Storewide closed-order banner",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Storefront layout renders a role=status banner sitewide (not just homepage) using an admin-editable settings string (store.closed_message) whenever no season is open."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "StorefrontShell renders a fixed '<aside class=closed-banner>' sitewide whenever isOpen is false, with a static message (not admin-configurable)."},
+      "arm-06": {"score": 7, "flags": [], "note": "Storefront layout renders a sitewide role=status banner when no season is open, with copy that varies based on whether any closed seasons exist yet — but message text is hardcoded, not admin-settable like arm-01's."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/layout.tsx", "arm-05": "app/components/storefront-shell.tsx", "arm-06": "app/(storefront)/layout.tsx"}
+  },
+  {
+    "id": "R-013",
+    "name": "Footer email signup",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "SiteFooter mounts NewsletterSignup component in a dedicated footer column, wired to the real subscribe API."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "Footer has a real inline newsletter form (email input + submit) wired to POST /api/newsletter with success/error messaging."},
+      "arm-06": {"score": 8, "flags": [], "note": "Footer mounts a SubscribeForm component wired to the real subscribe API, same pattern as the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/storefront/site-footer.tsx", "arm-05": "app/components/storefront-shell.tsx", "arm-06": "app/(storefront)/layout.tsx"}
+  },
+  {
+    "id": "R-014",
+    "name": "Test-mode banner on storefront",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "TestModeBanner mounted at the top of the storefront layout (every storefront page), gated by isTestMode(); clear amber banner with explicit copy about mock gateway/no real charges."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "A TEST/LIVE mode string exists only inside the admin layout header — the storefront layout/shell has no test-mode banner at all; storefront shoppers never see it."},
+      "arm-06": {"score": 8, "flags": [], "note": "TestModeBanner mounted in the storefront layout, gated on env.APP_ENV, with an explicit env-switch link back to the live site when configured — same coverage as the clone cluster plus a nice reverse-switch companion for admin."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/test-mode-banner.tsx", "arm-05": "app/admin/layout.tsx", "arm-06": "components/test-mode-banner.tsx"}
+  },
+  {
+    "id": "R-015",
+    "name": "Package category filters",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Category chips derived from actual product.category values, URL-driven (?category=), 'All' plus each distinct category."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 4, "flags": [], "note": "Filter dropdown only offers a hardcoded 3-way product KIND filter (All/Mishloach manos/Donations), not a data-driven category taxonomy — a materially different, coarser feature than 'package category filters'."},
+      "arm-06": {"score": 8, "flags": [], "note": "Category chips derived from distinct product.category values, client-side filtered, same UX pattern as the clone cluster's URL-param version (state-driven instead of URL-driven)."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/catalog/page.tsx", "arm-05": "app/components/catalog-grid.tsx", "arm-06": "app/(storefront)/packages/packages-grid.tsx"}
+  },
+  {
+    "id": "R-016",
+    "name": "Package price sorting",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Name / price-asc / price-desc sort, URL-driven, correctly re-sorts the (already category-filtered) product list."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "Featured/price-low/price-high sort select, client-state driven, correctly re-sorts the filtered product list."},
+      "arm-06": {"score": 8, "flags": [], "note": "Name / price-asc / price-desc sort using lowestPriceCents() (accounts for option deltas), same coverage as the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/catalog/page.tsx", "arm-05": "app/components/catalog-grid.tsx", "arm-06": "app/(storefront)/packages/packages-grid.tsx"}
+  },
+  {
+    "id": "R-017",
+    "name": "Catalog sold-out handling",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "isSoldOut() derives from trackInventory + (quantityOnHand - reserved <= 0); badge on grid/detail/quick-view; order-builder Add button disabled when sold out."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "isProductAvailable() checked in catalog grid (sold-out label, no CTA) and order builder (Add disabled, 'Sold out' label) — real logic, consistently applied in both surfaces."},
+      "arm-06": {"score": 8, "flags": [], "note": "isSoldOut()-derived badge shown on grid/quick-view/detail; low-stock warning (\"Only N left\") at <=10 units is a nice extra touch beyond the binary sold-out flag."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "lib/catalog.ts", "arm-05": "lib/inventory.ts", "arm-06": "lib/storefront/catalog.ts"}
+  },
+  {
+    "id": "R-018",
+    "name": "Token-verified email preference states + 3 unsubscribe prefs",
+    "scores": {
+      "arm-01": {"score": 7, "flags": [], "note": "Token-gated preferences page/API with 2 boolean toggles (wantsSeasonOpening, wantsPurimReminders) plus overall SUBSCRIBED/UNSUBSCRIBED status — effectively 3 states but only 2 are named 'preferences'."},
+      "arm-02": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 7, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 8, "flags": [], "note": "3 named preference toggles (marketing/updates/reminders) plus a full unsubscribe, all token-gated (JWT-like HMAC token with keyId rotation and timing-safe compare) — matches the '3 prefs' requirement literally and with strong token hygiene."},
+      "arm-06": {"score": 8, "flags": [], "note": "3 named preference toggles (prefNewProducts/prefReminders/prefCommunity) plus a full unsubscribe/resubscribe flow, all posted with an HMAC token — matches the requirement literally."}
+    },
+    "winner": "arm-05",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/(storefront)/newsletter/preferences/page.tsx", "arm-05": "app/unsubscribe/page.tsx", "arm-06": "components/../(storefront)/unsubscribe/unsubscribe-form.tsx"}
+  },
+  {
+    "id": "R-019",
+    "name": "Multi-recipient order builder (shared storefront/POS shell)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "components/builder/order-builder.tsx accepts mode='storefront'|'pos' plus draftUrl/addressUrlFor overrides; the storefront /order page AND components/admin/pos-client.tsx both mount the exact same component. Multi-recipient via per-line assignment. Confirmed real sharing, not just designed-for-it."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 4, "flags": [], "note": "Storefront order builder is real (multi-recipient per line), but POS (/admin/pos) is a completely separate, single-item quick-sale form that does NOT reuse the OrderBuilder component at all — the 'shared shell' half of this requirement is not met."},
+      "arm-06": {"score": 9, "flags": [], "note": "components/order-builder/order-builder-shell.tsx takes a `pos` prop and is mounted identically by both the storefront /order page and admin/pos/pos-shell.tsx — confirmed real sharing. Multi-recipient via per-line recipient assignment + reducer."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/order-builder.tsx + components/admin/pos-client.tsx", "arm-05": "app/components/order-builder.tsx + app/admin/pos/page.tsx", "arm-06": "components/order-builder/order-builder-shell.tsx + app/(admin)/admin/pos/pos-shell.tsx"}
+  },
+  {
+    "id": "R-020",
+    "name": "Inventory-aware / live-stock package selection",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Client polls /api/order-builder/stock every 30s and after every autosave, merging live availability over the initial catalog snapshot; Add disabled + 'Out of stock'/'N in stock' shown per product."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "isProductAvailable() computed from the server-rendered snapshot and re-checked at add-time; Add disabled when sold out. No periodic client refresh, so stock can go stale during a long session."},
+      "arm-06": {"score": 6, "flags": [], "note": "Stock computed server-side at page load (product.stock, soldOut) and shown per product card with a low-stock warning; no client-side polling/refresh loop was found, so availability can also go stale during a long session — same gap as arm-05."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/order-builder.tsx (STOCK_REFRESH_MS)", "arm-05": "lib/inventory.ts", "arm-06": "components/order-builder/product-card.tsx"}
+  },
+  {
+    "id": "R-021",
+    "name": "Product options + restricted add-ons",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Options (checkbox multi-select) and add-ons restricted to specific products (addOn.restrictedToProductIds) both wired into the builder's quick-view; unit price recomputed live from selections."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "product.options (single-select dropdown) and product.restrictedAddons both real and wired into line editing with live total recompute; option model is single-select vs. arm-01's multi-select checkboxes but functionally complete."},
+      "arm-06": {"score": 8, "flags": [], "note": "ProductOptionValue options and ProductAddOn restriction enforced not just in the UI but re-validated server-side in resolveDraftLines (rejects an add-on not allowed on its parent product, rejects an option value that doesn't belong to the product) — stronger correctness than the UI-only enforcement in the other arms."}
+    },
+    "winner": "arm-06",
+    "runner_up": "arm-01",
+    "evidence": {"arm-01": "components/builder/product-panel.tsx", "arm-05": "app/components/order-builder.tsx", "arm-06": "lib/orders/resolve-lines.ts"}
+  },
+  {
+    "id": "R-022",
+    "name": "Save and resume web drafts (autosave + guest clear on success)",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "800ms-debounced autosave with stale-response guarding (pendingEditsRef); guest drafts keyed by HMAC-hashed random token in an httpOnly cookie; completeDraft() clears the guest cookie ONLY on successful checkout, never on abandonment — exactly matches the spec."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 6, "flags": [], "note": "700ms-debounced autosave to a server draft keyed by an access token stored in sessionStorage (not httpOnly cookie — more exposed to XSS than the other arms' approach); resumes on reload via sessionStorage id. Guest-clear-on-success behavior not directly verified in the reviewed slice."},
+      "arm-06": {"score": 8, "flags": [], "note": "Explicit design comment: signed-in customers autosave to a server draft; guests autosave to localStorage and only get a server draft + httpOnly-cookie access token at checkout identity capture; guest copy clears ONLY on success/explicit cancel, never on refresh — matches the spec intent, though guest state living in localStorage before checkout is a smaller attack surface than a cookie-backed draft from the first keystroke."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/order-builder/draft-store.ts", "arm-05": "app/components/order-builder.tsx", "arm-06": "components/order-builder/use-auto-save.ts"}
+  },
+  {
+    "id": "R-023",
+    "name": "Guest checkout access tokens",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Random 32-byte token minted for guests, httpOnly/sameSite=lax cookie, only the HMAC of the token stored in DB (raw token never persisted) — anti-enumeration by design since no API accepts a draft id from the client."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 5, "flags": [], "note": "Guest token exists and is sent via a custom x-draft-access-token header, but the raw token is kept in sessionStorage on the client rather than an httpOnly cookie — more exposed to XSS/theft than the clone cluster or arm-06's cookie-based approach."},
+      "arm-06": {"score": 8, "flags": [], "note": "generateGuestToken/hashGuestToken/verifyGuestToken with url-safe random tokens, hashed storage, httpOnly cookie delivery, and dedicated unit checks (scripts/test-p4.mts) covering uniqueness, determinism, and rejection of wrong/null tokens."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "lib/order-builder/draft-store.ts", "arm-05": "app/components/order-builder.tsx", "arm-06": "lib/orders/guest-token.ts"}
+  },
+  {
+    "id": "R-024",
+    "name": "Saved-address reuse in ordering",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "AssignmentDialog's 'Address book' tab lists the signed-in customer's saved addresses with radio selection; assigning reuses the existing addressId rather than duplicating the address."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "Per-line recipient select offers 'self/saved address' and 'someone in my address book', backed by draft.addresses — real reuse, though selection UX is a plain <select> rather than a dedicated picker."},
+      "arm-06": {"score": 8, "flags": [], "note": "RecipientAssignDialog lists bookAddresses for reuse by reference; add-recipient autocomplete also fills from and can point at existing book entries — same coverage as the clone cluster."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/assignment-dialog.tsx", "arm-05": "app/components/order-builder.tsx", "arm-06": "components/order-builder/recipient-assign-dialog.tsx"}
+  },
+  {
+    "id": "R-025",
+    "name": "Address autocomplete + server-side validation",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Debounced /api/addresses/autocomplete suggests from the signed-in customer's own saved book only (no cross-customer leak); zod addressInputSchema enforces server-side validation on every address-accepting endpoint."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 3, "flags": ["MISSING"], "note": "No autocomplete/suggestion feature exists anywhere in the codebase (confirmed via grep — zero matches). Server-side validation is real (zod addressSchema in the address PATCH route) but that's only half the requirement."},
+      "arm-06": {"score": 7, "flags": [], "note": "Add-recipient dialog suggests from the customer's own address book as they type (client-side filter, capped list), matching the clone cluster's scope; server-side validation + deliverability check via POST /api/addresses/validate before a recipient is accepted."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "app/api/addresses/autocomplete/route.ts", "arm-05": "app/api/addresses/[addressId]/route.ts", "arm-06": "components/order-builder/add-recipient-dialog.tsx"}
+  },
+  {
+    "id": "R-026",
+    "name": "Builder product panel + cards + in-builder quick view",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "ProductPanel renders cards with live stock + Quick add; a dedicated in-builder QuickViewDialog (modal, options/add-ons/quantity, live total) is where customization actually happens."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 5, "flags": [], "note": "Product panel + cards exist in the builder, but there is no dedicated in-builder quick-view dialog — options/add-ons are only editable after a line is already added (inline in the cart section), not via a pre-add quick view like the other two arms."},
+      "arm-06": {"score": 8, "flags": [], "note": "Dedicated ProductPanel/ProductCard/ProductQuickView files; quick view is a real modal with options/add-ons and an Add action, mirroring the clone cluster's approach with cleaner component separation."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/product-panel.tsx", "arm-05": "app/components/order-builder.tsx", "arm-06": "components/order-builder/product-quick-view.tsx"}
+  },
+  {
+    "id": "R-027",
+    "name": "Assign products to recipients",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Each cart line carries its own `assignment` (onOrder/addressBook/newRecipient); AssignmentDialog per-line lets the shopper pick or change who each package goes to, independent of other lines."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "Each cart line carries its own `recipient` (self/saved/new), editable per line via a select + conditional fields — real per-line assignment, just plainer UI."},
+      "arm-06": {"score": 8, "flags": [], "note": "Each cart line has recipientClientId; RecipientAssignDialog assigns per line to an existing draft recipient, book address, or a newly-created one — server-side resolveDraftLines re-validates the recipient reference too."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/order-builder.tsx (assignLine)", "arm-05": "app/components/order-builder.tsx", "arm-06": "components/order-builder/recipient-assign-dialog.tsx"}
+  },
+  {
+    "id": "R-028",
+    "name": "Add recipient from saved address / new address",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "AssignmentDialog's 3-tab picker (on this order / address book / new recipient) lets a signed-in shopper add a brand-new recipient inline, which server-side auto-saves to their address book (applyAssignmentRules)."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "Recipient select offers saved-address or brand-new-recipient (with full address fields); new recipients are just embedded in the line, not necessarily persisted to a reusable book entry in this component."},
+      "arm-06": {"score": 8, "flags": [], "note": "AddRecipientDialog supports picking from bookAddresses via autocomplete-fill or entering a fully new address, with an explicit 'Save to my address book' checkbox for signed-in customers and server deliverability validation before acceptance."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/assignment-dialog.tsx", "arm-05": "app/components/order-builder.tsx", "arm-06": "components/order-builder/add-recipient-dialog.tsx"}
+  },
+  {
+    "id": "R-029",
+    "name": "Edit saved address while ordering",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "AssignmentDialog's address-book tab has an inline 'Edit' action that opens the same AddressForm and PATCHes /api/account/addresses/[id] without leaving the builder; explicitly warns when the edit would re-address other on-order lines."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 2, "flags": ["STUB"], "note": "A PATCH /api/addresses/[id] endpoint exists and is real, but the order builder UI never calls it — no edit affordance for a saved address is wired into the ordering flow at all, so the requirement's 'while ordering' half is not met."},
+      "arm-06": {"score": 8, "flags": [], "note": "RecipientAssignDialog exposes onEditAddress which opens a dedicated EditSavedAddressDialog in-place, updates the local book state on save, without leaving the builder."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/assignment-dialog.tsx", "arm-05": "app/api/addresses/[addressId]/route.ts", "arm-06": "components/order-builder/edit-saved-address-dialog.tsx"}
+  },
+  {
+    "id": "R-030",
+    "name": "Desktop order sidebar + mobile cart FAB",
+    "scores": {
+      "arm-01": {"score": 8, "flags": [], "note": "Sticky desktop sidebar (lg:block) shows CartPanel; a fixed-position mobile FAB (lg:hidden) with item count + running total opens the same CartPanel in a modal."},
+      "arm-02": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 8, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 7, "flags": [], "note": "CSS-confirmed: .cart-sidebar is sticky on desktop and hidden below 700px; .cart-fab is a real fixed-position button shown only on mobile that scrolls to the cart section — simpler (scroll vs. modal) but functionally real."},
+      "arm-06": {"score": 8, "flags": [], "note": "OrderSidebar (desktop) and MobileCartFab (mobile, opens the same CartPanel) are dedicated components mounted side-by-side in OrderBuilderShell — same coverage as the clone cluster with cleaner separation."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/builder/order-builder.tsx", "arm-05": "app/styles.css", "arm-06": "components/order-builder/mobile-cart-fab.tsx"}
+  },
+  {
+    "id": "R-031",
+    "name": "Shared storefront/POS builder shell",
+    "scores": {
+      "arm-01": {"score": 9, "flags": [], "note": "Confirmed by direct import: components/admin/pos-client.tsx imports and mounts the exact same components/builder/order-builder.tsx used by the storefront /order page, passing mode='pos' and staff-gated draft/address URLs — genuinely one shell, two callers."},
+      "arm-02": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-03": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01."},
+      "arm-04": {"score": 9, "flags": ["CLONE-TIE"], "note": "Byte-identical to arm-01 for these files."},
+      "arm-05": {"score": 1, "flags": ["MISSING"], "note": "Confirmed by direct inspection: admin/pos/page.tsx is a standalone single-item form (name/gift/qty/payment method) with its own hand-rolled fetch to /api/admin/operations — it does not import or reuse app/components/order-builder.tsx in any way. The 'shared shell' requirement is not met."},
+      "arm-06": {"score": 9, "flags": [], "note": "Confirmed by direct import: app/(admin)/admin/pos/pos-shell.tsx imports and mounts components/order-builder/order-builder-shell.tsx with a `pos` config object — same real sharing pattern as arm-01."}
+    },
+    "winner": "arm-01",
+    "runner_up": "arm-06",
+    "evidence": {"arm-01": "components/admin/pos-client.tsx", "arm-05": "app/admin/pos/page.tsx", "arm-06": "app/(admin)/admin/pos/pos-shell.tsx"}
+  }
+]
