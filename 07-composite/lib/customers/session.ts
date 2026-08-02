@@ -60,7 +60,7 @@ export const getCustomerContext = cache(async (): Promise<CustomerContext | null
 
 export async function requireCustomer(): Promise<CustomerContext> {
   const ctx = await getCustomerContext();
-  if (!ctx) redirect(isDevAuthBypass ? "/dev-login" : "/");
+  if (!ctx) redirect(isDevAuthBypass ? "/dev-login" : "/signin");
   return ctx;
 }
 

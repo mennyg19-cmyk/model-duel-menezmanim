@@ -59,7 +59,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
 
 export async function requireStaff(): Promise<AuthContext> {
   const ctx = await getAuthContext();
-  if (!ctx) redirect(isDevAuthBypass ? "/dev-login" : "/");
+  if (!ctx) redirect(isDevAuthBypass ? "/dev-login" : "/login");
   return ctx;
 }
 

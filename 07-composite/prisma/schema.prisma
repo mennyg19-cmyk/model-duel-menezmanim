@@ -136,6 +136,10 @@ model StaffUser {
   inviteToken   String?              @unique
   invitedAt     DateTime?
   confirmedAt   DateTime?
+  // Set once, at invite confirmation (lib/passwords.ts, PBKDF2). This is the
+  // only repeatable production sign-in path staff have — without it, a
+  // session expiry after the one-time invite link is a permanent lockout.
+  passwordHash  String?
   version       Int                  @default(1)
   overrides     PermissionOverride[]
   sessions      AuthSession[]
@@ -171,6 +175,10 @@ model Customer {
   phone           String?
   normalizedPhone String?           @unique
   clerkUserId     String?           @unique
+  // Set at self-service registration (lib/passwords.ts, PBKDF2). Null for
+  // customers who only ever checked out as a guest (R-023) and never
+  // registered — a guest order never creates a login-capable account.
+  passwordHash    String?
   addresses       Address[]
   orders          Order[]
   sessions        CustomerSession[]

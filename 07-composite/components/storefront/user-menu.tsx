@@ -53,7 +53,7 @@ export function UserMenu({ customerName }: { customerName: string | null }) {
               </MenuLink>
             </>
           ) : (
-            <MenuLink href="/account" onSelect={() => setIsOpen(false)}>
+            <MenuLink href="/signin" onSelect={() => setIsOpen(false)}>
               Sign in
             </MenuLink>
           )}

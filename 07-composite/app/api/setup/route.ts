@@ -4,17 +4,23 @@ import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit";
 import { setSetting } from "@/lib/settings";
 import { createLoginSession, issueSessionResponse } from "@/lib/auth";
+import { hashPassword } from "@/lib/passwords";
 import { parseBody } from "@/lib/parse-body";
 import { normalizeEmail, normalizeWhitespace } from "@/lib/text";
 
 const setupSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
+  // Without this the first manager could never sign back in at /login once
+  // this bootstrap session expires (R-108/R-130).
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 export async function POST(request: Request) {
   const parsed = await parseBody(request, setupSchema, "Name and a valid email are required");
   if (!parsed.ok) return parsed.response;
+
+  const passwordHash = await hashPassword(parsed.data.password);
 
   // Advisory lock makes the empty-database check atomic: two concurrent
   // bootstraps cannot both create the first manager.
@@ -29,6 +35,7 @@ export async function POST(request: Request) {
         role: "MANAGER",
         status: "ACTIVE",
         confirmedAt: new Date(),
+        passwordHash,
       },
     });
   });

@@ -9,7 +9,7 @@ export function base64UrlEncode(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function base64UrlDecode(value: string): Uint8Array {
+export function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
   const b64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(b64);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -41,6 +41,6 @@ export function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export function encodeText(value: string): Uint8Array {
+export function encodeText(value: string): Uint8Array<ArrayBuffer> {
   return encoder.encode(value);
 }

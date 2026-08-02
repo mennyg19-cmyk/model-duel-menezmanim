@@ -10,6 +10,8 @@ const DELIVERY_CHECK_LIMIT = 60;
 const ADDRESS_VALIDATE_LIMIT = 30;
 const DRAFT_SAVE_LIMIT = 60;
 const CHECKOUT_LIMIT = 20;
+const LOGIN_LIMIT = 10;
+const REGISTER_LIMIT = 10;
 const MAX_KEYS = 10_000;
 
 const buckets = new Map<string, { windowStart: number; count: number }>();
@@ -47,4 +49,14 @@ export function draftSaveRateLimit(clientIp: string, now: number = Date.now()): 
 
 export function checkoutRateLimit(clientIp: string, now: number = Date.now()): boolean {
   return tryConsume(`checkout:${clientIp}`, CHECKOUT_LIMIT, now);
+}
+
+// Keyed by IP + email so one guessed password can't burn another account's
+// budget, while a single attacker rotating emails still hits the IP window.
+export function loginRateLimit(clientIp: string, email: string, now: number = Date.now()): boolean {
+  return tryConsume(`login:${clientIp}:${email.toLowerCase()}`, LOGIN_LIMIT, now);
+}
+
+export function registerRateLimit(clientIp: string, now: number = Date.now()): boolean {
+  return tryConsume(`register:${clientIp}`, REGISTER_LIMIT, now);
 }

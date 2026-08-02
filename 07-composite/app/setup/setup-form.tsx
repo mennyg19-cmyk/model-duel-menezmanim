@@ -18,9 +18,15 @@ export function SetupForm() {
     setError(null);
 
     const form = new FormData(event.currentTarget);
+    const password = String(form.get("password"));
+    if (password !== String(form.get("confirmPassword"))) {
+      setError("Passwords do not match");
+      setIsSubmitting(false);
+      return;
+    }
     const { ok, body } = await apiFetch("/api/setup", {
       method: "POST",
-      body: { name: String(form.get("name")), email: String(form.get("email")) },
+      body: { name: String(form.get("name")), email: String(form.get("email")), password },
     });
 
     if (!ok) {
@@ -41,6 +47,21 @@ export function SetupForm() {
       <div>
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" required autoComplete="email" />
+      </div>
+      <div>
+        <Label htmlFor="password">Password</Label>
+        <Input id="password" name="password" type="password" minLength={8} required autoComplete="new-password" />
+      </div>
+      <div>
+        <Label htmlFor="confirmPassword">Confirm password</Label>
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          minLength={8}
+          required
+          autoComplete="new-password"
+        />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={isSubmitting}>

@@ -47,11 +47,11 @@ export async function middleware(request: NextRequest) {
   if (!session) {
     // Dev-login only exists while the bypass is on (same shared predicate
     // lib/env exposes — off any Vercel deploy, and only under APP_ENV=test);
-    // otherwise unauthenticated visitors land on the storefront, matching
-    // requireStaff's redirect.
+    // otherwise unauthenticated visitors land on the real staff sign-in
+    // page (/login), matching requireStaff's redirect.
     const bypassOn = isDevAuthBypassEnabled();
-    const loginUrl = new URL(bypassOn ? "/dev-login" : "/", request.url);
-    if (bypassOn) loginUrl.searchParams.set("next", request.nextUrl.pathname);
+    const loginUrl = new URL(bypassOn ? "/dev-login" : "/login", request.url);
+    loginUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
   return NextResponse.next();
