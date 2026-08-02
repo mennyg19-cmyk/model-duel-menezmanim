@@ -23,6 +23,25 @@ Workspace roots (read-only source):
 
 `/tmp/tomchei-work/duel/runs/2026-07-20-1748-tomchei-shabbos-website-model_duel/arms/arm-0N/workspace`
 
+**CORRECTION (found after initial Pass A):** the on-disk workspace above is only
+the arm's own build for **arm-02, arm-05, arm-06**. For **arm-01, arm-03, arm-04**
+that path was overwritten during the Test 6 "clone winner, seed bugs, detect/fix"
+exercise and now holds arm-02's code with a different name on it (confirmed via
+git history: diffing each arm's own `P12 gated — Test 4 complete` commit against
+the current on-disk tree shows 567/657/818 files of difference for arm-01/03/04
+respectively, vs. 15–20 files for arm-02/05/06). The duel harness repo
+(`/tmp/tomchei-work/duel`) was a shallow clone; `git fetch --unshallow` recovered
+310 commits of full history. Each arm's **true, independent** Test-4-complete
+build has been extracted from that history into:
+
+`/tmp/tomchei-work/true-arms/arm-0N/` (arm-01 @ commit `efee323`, arm-02 @ `6b9b9b6`,
+arm-03 @ `15dcf3f`, arm-04 @ `f23da8d`, arm-05 @ `8cb984a`, arm-06 @ `3d2a1d3`)
+
+All Pass A grading for arm-01, arm-03, arm-04 must use `/tmp/tomchei-work/true-arms/`,
+not the `arms/arm-0N/workspace` clone-cluster path. arm-02/arm-05/arm-06 scores from
+the original Pass A pass remain valid as-is (their on-disk workspace already was
+their own build).
+
 ## Inventory universe
 
 | Set | Count | Source |
